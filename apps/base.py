@@ -13,18 +13,72 @@ import os
 import os.path as op
 import sys
 
+from TDGP.apps.font import *
+
 from TDGP import __copyright__, __version__
 
-TDGPHELP = "TDGP utility libraries v{} [{}]\n".foramt(__version__, __copyright__)
+TDGPHELP = "TDGP utility libraries v{} [{}]\n".format(__version__, __copyright__)
 
+
+# logging output color format
+# https://stackoverflow.com/questions/384076/how-can-i-color-python-logging-output
+COLORS = {
+    'WARNING': yellow,
+    'INFO': green,
+    'DEBUG': green,
+    'CRITICAL': yellow,
+    'ERROR': red
+}
+class ColoredFormatter(logging.Formatter):
+
+    def __init__(self, msg, use_color=True):
+        logging.Formatter.__init__(self, msg)
+        self.use_color = use_color
+    def format(self, record):
+        levelname = record.levelname
+        if self.use_color and levelname in COLORS:
+            color_level = COLORS[levelname](levelname)
+            record.levelname = color_level
+        return logging.Formatter.format(self, record)
+
+class ColoredLogger(logging.Logger):
+    formats = magenta("%(asctime)s <%(module)s>") +"[%(levelname)s]"+ green(" %(message)s")
+    def __init__(self, name):
+        logging.Logger.__init__(self, name, logging.DEBUG)
+
+        color_formatter = ColoredFormatter(self.formats)
+        console = logging.StreamHandler()
+        console.setFormatter(color_formatter)
+
+        self.addHandler(console)
+
+
+def debug(level=logging.DEBUG):
+
+    logging.setLoggerClass(ColoredLogger)
+    formats = magenta("%(asctime)s <%(module)s>")
+    formats += " [%(levelname)s]"
+    formats += green(" %(message)s")
+    logging.basicConfig(level=level, format=formats, datefmt="%H:%M:%S")
+
+'''
+COLORS = {
+    'WARNING': yellow,
+    'INFO': green,
+    'DEBUG': green,
+    'CRITICAL': yellow,
+    'ERROR': red
+}
 def debug(level=logging.DEBUG):
     """
     Basic config logging format
     """
-    from TDGP.apps.font import magenta, green
-    formats = magenta("%(asctime)s [%(module)s]")
+    from TDGP.apps.font import magenta, green, yellow
+    formats = magenta("%(asctime)s <%(module)s>")
+    formats += yellow(" [%(levelname)s]")
     formats += green(" %(message)s")
     logging.basicConfig(level=level, format=formats, datefmt="%H:%M:%S")
+'''
 
 debug()
 
@@ -98,7 +152,7 @@ class ActionDispatcher(object):
             action = action.rjust(max_action_len + 4)
             help += " | ".join((action, action_help.capitalize() + "\n"))
 
-        help += "\n" + BIOWAYHELP
+        help += "\n" + TDGPHELP
 
         sys.stderr.write(help)
         sys.exit(1)
@@ -121,7 +175,7 @@ class ActionDispatcher(object):
 
         globals[action](sys.argv[2:])
 
-
+'''
 class OptionParser(OptionP):
     """
     OptionParser modify from https://githup.com/tanghaibao/jcvi.git
@@ -171,7 +225,7 @@ class OptionParser(OptionP):
             if o.get_opt_string() not in ("--help", "--version") \
                     and o.action != "store_false":
                 o.help += " [default:{0}".format(default_tag)
-
+'''
 
 def get_module_docstring(filepath):
     """

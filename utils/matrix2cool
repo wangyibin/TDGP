@@ -1,0 +1,20 @@
+#!/bin/bash
+
+help() {
+        echo
+        echo "Usage: `basename $0` sample_20000_iced.matrix sample_20000_abs.bed"
+        echo "     convert hicpro matrix to cool by hicexplorer command"
+        echo
+}
+
+
+matrix=$1
+bed=$2
+
+if [[ -z $matrix || -z $bed ]];then
+    help;
+    exit
+fi
+
+
+conda run -n hicexplorer hicConvertFormat -m $matrix --bedFileHicpro $bed --inputFormat hicpro --outputFormat cool -o ${matrix%%.matrix}.cool
