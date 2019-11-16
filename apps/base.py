@@ -13,6 +13,8 @@ import os
 import os.path as op
 import sys
 
+from glob import glob
+
 from TDGP.apps.font import *
 
 from TDGP import __copyright__, __version__
@@ -54,10 +56,10 @@ class ColoredLogger(logging.Logger):
 
 
 def debug(level=logging.DEBUG):
-
+    import logging
     logging.setLoggerClass(ColoredLogger)
     formats = magenta("%(asctime)s <%(module)s>")
-    formats += " [%(levelname)s]"
+    formats += yellow(" [%(levelname)s]")
     formats += green(" %(message)s")
     logging.basicConfig(level=level, format=formats, datefmt="%H:%M:%S")
 
@@ -109,6 +111,24 @@ def dmain(mainfile, type="action"):
 
     a = ActionDispatcher(actions)
     a.print_help()
+
+
+def splitall(path):
+    """
+    split all path and return a list
+    >>> splitall("/code/TDGP/utils")
+    ["code", "TDGP", "utils"]
+    """
+
+    allparts = []
+    while True:
+        path, p1 = op.split(path)
+        if not p1:
+            break
+        allparts.append(p1)
+    allparts = allparts[::-1]
+    return allparts
+
 
 
 class ActionDispatcher(object):

@@ -9,4 +9,4 @@ from TDGP.apps.base import dmain
 
 
 if __name__ == "__main__":
-    dmain(__file, 'module')
+    dmain(__file__, 'module')

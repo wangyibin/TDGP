@@ -1,0 +1,16 @@
+#!/bin/bash
+
+        ## prefetch sra through wget
+
+sra_num=$1
+
+if [ -z $sra_num ]; then
+    echo
+    echo "Usage: wget_sra SRA000000"
+        echo
+        exit;
+fi
+
+ wget -cb ftp://ftp-trace.ncbi.nlm.nih.gov/sra/sra-instant/reads/ByRun/sra/SRR/${sra_num:0:6}/$sra_num/${sra_num}.sra
+
+

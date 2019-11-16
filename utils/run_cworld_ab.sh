@@ -32,15 +32,15 @@ sparseToDense.py -b $bed $matrix -o ${bed%%_abs.bed}.dense.matrix  -c
 echo "staring create cworld header"
 python /public1/home/stu_wangyibin/code/TDGP/utils/cworld_header.py $bed $genome -c
 
-
-for dense in *dense.matrix; do
+name=${bed%%_abs.bed}
+for dense in *${name}*dense.matrix; do
         echo ${dense%%.dense.matrix}
 done | parallel -j 12 "addMatrixHeaders.pl -i {}.dense.matrix --xhf {}_abs.bed.header --yhf {}_abs.bed.header -v -o {}"
 
-for matrix in *addedHeaders.matrix.gz;do
+for matrix in *${name}*addedHeaders.matrix.gz;do
         echo ${matrix}
 done | parallel -j 12 "matrix2compartment.pl -i {}"
 
-cat *addedHeaders.zScore.eigen1.bedGraph |sort -V |grep -v track > ${matrix%%matrix}all_eigen1.bg
+cat *${name}*addedHeaders.zScore.eigen1.bedGraph |sort -V |grep -v track > ${matrix%%matrix}all_eigen1.bg
 
-bedtools intersect -a ${matrix%%matrix}all_eigen1.bg -b $cworld_path/${genome}.refseq.txt -c > ${matrix%%.matrix}_all_eigen1_gene_density.bg
+bedtools intersect -a ${matrix%%matrix}all_eigen1.bg -b $cworld_dir/${genome}.refseq.txt -c > ${matrix%%.matrix}_all_eigen1_gene_density.bg

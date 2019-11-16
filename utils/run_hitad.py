@@ -39,7 +39,13 @@ if not op.exists(bed):
 
 
 ncpu = opts.threads
-exclude = "--exclude " + " ".join(opts.exclude.split(',')) if opts.exclude else ""
+if opts.exclude:
+    if op.exists(opts.exclude):
+        exclude = "--exclude " + " ".join(i.strip() for i in open(opts.exclude) if i.strip())
+    else:
+        exclude = "--exclude " + " ".join(opts.exclude.split(','))
+else:
+    exclude = ""
 
 
 out_prefix = """
@@ -71,6 +77,11 @@ echo "res:$resolution
 
 hitad_command = """
 hitad -O ${matrix%%.matrix}.hitad_out.txt -d ${matrix%%.matrix}.ini --logFile hitad.log -p $ncpu -W RAW  """ + exclude
+
+hitad_command = hitad_command + "\ntad_merge.py ${matrix%%.matrix}.hitad_out.txt > ${matrix%%.matrix}.hitad_out.merged.txt"
+hitad_command = hitad_command + "\ncooler dump -t bins ${matrix%%.matrix}.cool > ${matrix%%.matrix}_DI.bg"
+#hitad_command = hitad_command + "\nsort -k1,1 -k2,2n ${matrix%%.matrix}_DI.bg > ${matrix%%.matrix}_DI.sorted.bg"
+#hitad_command = hitad_commdan + "\nbedGraphToBigWig ${matrix%%.matrix}_DI.sorted.bg "
 
 with open('run_{}.sh'.format(matrix.replace('.matrix', '')), 'w') as f_out:
     f_out.write(out_prefix + out + hitad_command)

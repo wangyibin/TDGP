@@ -1,0 +1,15 @@
+#!/bin/bash
+
+## Convert hicpro to cool format use hicexplorer
+bedfile=$2
+matrix=$1
+
+if [[ -z $bedfile || -z $matrix ]]; then
+        echo
+        echo "Usage: hicpro2cool rice_5000_iced.matrix rice_5000_abs.bed"
+        echo
+        return 1
+fi
+
+conda run -n hicexplorer hicConvertFormat -m $matrix --bedFileHicpro $bedfile --inputFormat hicpro --outputFormat cool -o ${matrix%%.matrix}.cool
+

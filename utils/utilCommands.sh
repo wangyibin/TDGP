@@ -4,6 +4,10 @@
 
 ## my usualy use command library
 
+why(){
+        echo "^o^"
+}
+
 
 linkHiCProMatrix(){
 
@@ -19,6 +23,22 @@ linkHiCProMatrix(){
         ln -s $dir/hic_results/matrix/*/iced/$res/*matrix .
         ln -s $dir/hic_results/matrix/*/raw/$res/*bed .
         ln -s $dir/hic_results/matrix/*/raw/$res/*matrix .
+}
+
+
+hicpro2cool() {
+        ## Convert hicpro to cool format use hicexplorer
+        bedfile=$1
+        matrix=$2
+
+        if [[ -z $bedfile || -z $matrix ]]; then
+                echo
+                echo "Usage: hicpro2cool rice_5000_iced.matrix rice_5000_abs.bed"
+                echo
+                return 1
+        fi
+
+        conda run -n hicexplorer hicConvertFormat -m $matrix --bedFileHicpro $bedfile --inputFormat hicpro --outputFormat cool -o ${matrix%%.matrix}.cool
 }
 
 
@@ -48,8 +68,21 @@ sra2fq() {
                 echo 
                 return 1
         fi
-        fastq-dump --gzip --split-3 $sra_num.sra -O srr${sra_num##SRR} &
+        nohup fastq-dump --gzip --split-3 $sra_num.sra -O srr${sra_num##SRR} &
 
+}
+
+ascp_sra() {
+        ## use ascp to download sra 
+        sra_num=$1
+        if [ -z $sra_num ]; then
+                echo
+                echo "Usage: ascp_sra SRA000000"
+                echo
+                return 1
+        fi
+
+        ascp -i ~/.aspera/connect/etc/asperaweb_id_dsa.openssh -k 1 -T 1 -l 200m anonftp@ftp.ncbi.nlm.nih.gov:/sra/sra-instant/reads/ByRun/sra/SRR/${sra_num:0:6}/$sra_num/${sra_num}.sra
 }
 
 
@@ -79,4 +112,14 @@ dump_fq() {
         fi
 
         fastq-dump --gzip --split-3 $sra_file -O srr${sra_file##SRR} &
+}
+
+sra_fastp() {
+        ## qsub submit all sra fastq file to use fastp control quality
+        for sra in *_1.fastq.gz; do s=${sra%%_1.fastq.gz};echo "fastp -i ${s}_1.fastq.gz -o ${s}_R1.fastq.gz -I ${s}_2.fastq.gz -O ${s}_R2.fastq.gz -j ${s}.json -h ${s}.html"> run_${s}_fastp.sh;qsub -pe mpi 4 run_${s}_fastp.sh; done
+}
+
+sra_fastp_PE() {
+        ## qsub submit all PE sra fastq file to use fastp control quality
+        for sra in  *.fastq.gz; do s=${sra%%.fastq.gz};echo "fastp -i ${s}.fastq.gz -o ${s}_fp_.fastq.gz -j ${s}.json -h ${s}.html"> run_${s}_fastp.sh;qsub -pe mpi 4 run_${s}_fastp.sh; done
 }

@@ -1,0 +1,16 @@
+#!/bin/bash
+
+
+## fastq-dump sra
+sra_file=$1
+
+if [ -z $sra_file  ]; then
+        echo
+        echo "Usage: dump_fq SRR000000"
+        echo
+        exit;
+fi
+
+                                                                                                                        fastq-dump --gzip --split-3 $sra_file -O srr${sra_file##SRR}
+
+

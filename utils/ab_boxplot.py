@@ -100,7 +100,7 @@ def read_bg(bgfile):
     return ab_data
 
 
-def plot(bgfile, outfile='ab_boxplot.pdf', chrom_list='all', column_num=4, 
+def plot(bgfile, title="Gene Density", outfile='ab_boxplot.pdf', chrom_list='all', column_num=4, 
         draw_per_chrom=False, exclude=[],sort_func='lambda x: int(x[3:])'):
     
     import matplotlib as mpl
@@ -148,7 +148,7 @@ def plot(bgfile, outfile='ab_boxplot.pdf', chrom_list='all', column_num=4,
             b_data = ab_data[(ab_data[0] == chrom) & (ab_data[3] < 0)]
             ab_boxplot(a_data,b_data, chrom, ax)
 
-    plt.suptitle('Gene Density', **suptitle_props)
+    plt.suptitle(title, **suptitle_props)
     plt.savefig(outfile, dpi=300,bbox_inches='tight' )
         
 
@@ -158,7 +158,9 @@ if __name__ == "__main__":
     from optparse import OptionParser
 
     p = OptionParser(__doc__)
-
+    
+    p.add_option('-t', '--title', default="",
+            help='the title of picture')
     p.add_option('-o', '--outfile', default='ab_boxplot.pdf', 
                     help='outfile of plot [default: %default]')
     p.add_option('--chrom_list', default='all',
@@ -182,6 +184,7 @@ if __name__ == "__main__":
         sys.exit(p.print_help())
 
     bgfile, = args
+    title = opts.title
     outfile = opts.outfile
     chrom_list = opts.chrom_list
     column_num = opts.column_num
@@ -189,4 +192,4 @@ if __name__ == "__main__":
     exclude = opts.exclude
     sort_func = opts.sort_func
     
-    plot(bgfile, outfile, chrom_list,column_num, draw_per_chrom, exclude, sort_func)
+    plot(bgfile,title, outfile, chrom_list,column_num, draw_per_chrom, exclude, sort_func)
