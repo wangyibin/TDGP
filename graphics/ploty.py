@@ -18,4 +18,5 @@ import sys
 
 
 
-class 
+class T():
+    pass

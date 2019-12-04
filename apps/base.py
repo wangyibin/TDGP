@@ -11,6 +11,7 @@ from __future__ import print_function
 import logging
 import os
 import os.path as op
+import six
 import sys
 
 from glob import glob
@@ -54,7 +55,7 @@ class ColoredLogger(logging.Logger):
 
         self.addHandler(console)
 
-
+"""
 def debug(level=logging.DEBUG):
     import logging
     logging.setLoggerClass(ColoredLogger)
@@ -71,16 +72,19 @@ COLORS = {
     'CRITICAL': yellow,
     'ERROR': red
 }
+
+"""
+
 def debug(level=logging.DEBUG):
     """
     Basic config logging format
     """
-    from TDGP.apps.font import magenta, green, yellow
-    formats = magenta("%(asctime)s <%(module)s>")
-    formats += yellow(" [%(levelname)s]")
-    formats += green(" %(message)s")
-    logging.basicConfig(level=level, format=formats, datefmt="%H:%M:%S")
-'''
+    from TDGP.apps.font import magenta, green, yellow, white
+    formats = white("%(asctime)s <%(module)s>")
+    formats += magenta(" [%(levelname)s]")
+    formats += yellow(" %(message)s")
+    logging.basicConfig(level=level, format=formats, datefmt="[%Y-%m-%d %H:%M:%S]")
+
 
 debug()
 
@@ -258,4 +262,43 @@ def get_module_docstring(filepath):
         docstring = None
     return docstring
 
+
+
+class BaseFile(object):
+    """
+    Base object of file.
+    """
+    def __init__(self, infile):
+        self.infile = infile
+        if not op.exists(self.infile):
+            logging.error('There is no file of `{}`.'.format(
+                self.infile))
+            sys.exit()
+        else:
+            logging.debug('Loaded {} file.'.format(infile))
+
+
+class Line(object):
+    def __init__(self, line, sep="\t"):
+        self.sep = sep
+        self.line = line
+        if not self.line.strip():
+            logging.warning('Empty Line.')
+        self.line_list = self.line.strip().split(self.sep)
+    
+    def __iter__(self):
+        for item in self.line_list:
+            yield item
+    
+    def __str__(self):
+        return self.sep.join(self.line_list)
+
+
+def listify(item):
+    """
+    To return a list or tuple value.
+    From https://github.com/tanghaibao/jcvi/blob/master/jcvi/apps/base.py listify
+    """
+    return item if (isinstance(item, list) or 
+                   isinstance(item, tuple)) else [item]
 
