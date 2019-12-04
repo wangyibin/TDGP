@@ -154,6 +154,87 @@ class TADFile(BaseFile):
         for item in self.bottom:
             size = item[2] - item[1]
             self.bottomSizes.append(size)
+    
+    def getBoundaryDict(self):
+        """
+        Get the TADs boundary
+        Params:
+        -------
+        None
+
+        Returns:
+        --------
+        out: `OrderedDict`
+
+        Examples:
+        --------
+        >>> tf = TADFile('sample.txt')
+        >>> tf.getBottomDict()
+        >>> tf.getBoundaryDict()
+        >>> tf.boundaryDict
+        OrderedDict(('Chr1', {1000, 20000 ...} ...))
+        """
+        self.boundaryDict = OrderedDict()
+        for chrom in self.bottomDict:
+            self.boundaryDict[chrom] = set()
+            for interval in self.bottomDict[chrom]:
+                self.boundaryDict[chrom].add(interval.begin)
+                self.boundaryDict[chrom].add(interval.end)
+
+        return self.boundaryDict
+
+
+    def getBoundary(self):
+        """
+        list of TADs boundary
+
+        Returns:
+        --------
+        out: `list`
+        """
+        self.boundary = []
+        for chrom in self.BoundaryDict:
+            for boundary in sorted(self.BoundaryDict[chrom]):
+                self.boundary.append((chrom, boundary))
+        return self.boundary
+
+
+    @classmethod
+    def getBoundaryBed(boundaryDict, chromSize, updistance=2e4, downdistance=2e4):
+        """
+        Get the TADs boundary bed with .
+
+        Params:
+        --------
+        boundaryDict: `dict` the dict of boundary
+        chromSize: `dict` the dict of chrom sizes
+        [Options]
+        updistance: `int` the upstream distance of boundary[default: 2e4]
+        downdistance: `int` the downstream distance of boundary[default: 2e4]
+
+        Returns:
+        --------
+        out: `list` a list of boundary bed
+
+        Examples:
+        --------
+        >>>tf.getBoundaryBed(boundaryDict, chromSize)
+
+        """
+        self.boundaryBed = []
+        for chrom in boundaryDict:
+            for boundary in boundaryDict[chrom]:
+                upstream = boundary - updistance\
+                    if (boundary - updistance) >= 0 \
+                    else 0
+                downstream = boundary + downdistance \
+                    if (boundary + downdistance <= chromSize[chrom]) \
+                    else chromSize[chrom]
+
+                res = (chrom, upstream, downstream, boundary)
+                self.boundaryBed.append(res)
+
+        return self.boundaryBed
 
     def getTADbyLevel(self):
         """
@@ -173,6 +254,7 @@ class TADFile(BaseFile):
                 if level not in self.sizeDict:
                     self.sizeDict[level] = []
                 self.sizeDict[level].append(interval.length())
+
 
     def plotSizeDistPerLevel(self, ax, out, exclude=[], scale=1000, xmin=0,
                      xmax=1000, step=200):
