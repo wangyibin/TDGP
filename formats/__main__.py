@@ -2,9 +2,9 @@
 # -*- coding:utf-8 -*-
 
 """
-TDGP analysis libraries.
+some util formats of the TDGP package.
 """
-from apps.base import dmain
+from ..apps.base import dmain
 
 
 if __name__ == "__main__":

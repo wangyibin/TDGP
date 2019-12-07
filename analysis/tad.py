@@ -4,6 +4,7 @@
 """
 TADs analysis libraries.
 """
+from __future__ import print_function
 
 import logging
 import numpy as np
@@ -13,15 +14,16 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import os.path as op
+import os
 import sys
 
 from collections import OrderedDict, defaultdict
 from intervaltree import Interval, IntervalTree
 from optparse import OptionParser
-from apps.base import ActionDispatcher
-from apps.base import debug, listify
-from apps.base import BaseFile, Line
-
+from TDGP.apps.base import ActionDispatcher
+from TDGP.apps.base import debug, listify, check_file_exists
+from TDGP.apps.base import BaseFile, Line
+from TDGP.apps.utilities import chrRangeID
 
 
 debug()
@@ -32,7 +34,10 @@ def main():
         ('plotSizeDist', 'plot the tad size distribution a list of samples'),
         ('getBottom', 'get bottom tads from hitad results'),
         ('stat', 'stat TADs informations'),
-        ('getBoundaryBed', 'get tad boundary'),
+        ('getBoundaryBed', 'get tad boundary'), 
+        ('testPipe', 'testPipe'),
+        ('annotate', 'annotate tad'),
+        ('whichTAD', 'find gene location in TADs')
     )
     p = ActionDispatcher(actions)
     p.dispatch(globals())
@@ -279,8 +284,9 @@ class TADFile(BaseFile):
         plt.savefig(out, dpi=300)
 
 
+
     @classmethod
-    def plotSizeDist(self, ax, data, out, label='Sample', scale=1000,
+    def plotSizeDist(self,  ax, data, out, label='Sample', scale=1000,
                      xmin=0, xmax=800, step=100):
 
         """
@@ -306,6 +312,94 @@ class TADFile(BaseFile):
 
         return ax
 
+
+class TADConservedLine(Line):
+    """
+    Object of TADConservedLine.
+
+    Params:
+    --------
+
+    Returns:
+    --------
+    
+    Examples:
+    --------
+    """
+    def __init__(self, line):
+        super(TADConservedLine, self).__init__(line)
+        self.chrom, self.start, self.end = self.line_list[:3]
+        self.genes = self.line_list[3]
+        self.start, self.end = int(self.start), int(self.end)
+
+    @classmethod
+    def from_list(self, input):
+        """
+        function of get object from a list.
+        list must contain `chrom`, `start`, `end`, `gene1,gene2`
+        """
+        assert isinstance(input, list), "input is not a list"
+
+        self.line_list = input
+        self.chrom, self.start, self.end = self.line_list[:3]
+        self.genes = self.line_list[3]
+        self.start, self.end = int(self.start), int(self.end)
+    
+
+
+
+class TADConserved(object):
+    """
+    Object of TAD conservation analysis.
+
+    Params:
+    --------
+
+    Returns:
+    --------
+
+    Examples:
+    --------
+    
+    """
+    def __init__(self):
+        pass
+    
+    def fetchSyntenyGene(self, tad, gene_tree):
+        if not isinstance(tad, Interval):
+            tad = Interval
+        result = gene_tree.overlap(*tad)
+        sorted_result = sorted(result)
+
+        return result
+    
+    @staticmethod
+    def getGene(tads, genes, fraction=0.7):
+        check_file_exists(tads)
+        check_file_exists(genes)
+        if 0 > float(fraction) > 1:
+            logging.error('The option `-F` must set in '
+                'range [0, 1], and you set {}'.format(fraction))
+            sys.exit()
+
+        bedtools_cmd = "bedtools intersect -a {} -b {} -wao -F {} |"
+                        " cut -f 1-3,7 ".format(tads, genes, fraction)
+        db = OrderedDict()
+            
+        for line in os.popen(bedtools_cmd):
+            line_list = line.strip().split()
+            ID = chrRangeID(line_list[:3])
+            gene = line_list[3]
+            if ID not in db:
+                db[ID] = []
+            db[ID].append(gene)
+        
+        for ID in db:
+            gene_list = db[ID]
+        
+        return db
+
+### outsite command start ###
 def getBottom(args):
     """
     %prog getBottom <tad.txt> [Options]
@@ -434,7 +528,121 @@ def stat(args):
         opts.genome, total_size * 1.0 / opts.genome))
 
 
+
+def testPipe(args):
+    """
+    test pipe for tad annotate.
+    """
+    db = OrderedDict()
+    if not sys.stdin.isatty():
+        handle = sys.stdin
+    else:
+        pass
+
+    for line in sys.stdin:
+        line_list = line.strip().split()
+        ID = chrRangeID(line_list[:3])
+        gene = line_list[3]
+        if ID not in db:
+            db[ID] = []
+        db[ID].append(gene)
+    
+    for ID in db:
+        print(ID + "\t" + ",".join(db[ID]))
+
+
+def annotate(args):
+    """
+    %prog tad.bed gene.bed [Options]
+    Annotate tads with gene.
+    """
+
+    p = OptionParser(annotate.__doc__)
+    p.add_option('-F', dest='fraction', default='0.7', 
+                    help='the fraction of gene overlap of tads')
+
+    opts, args = p.parse_args(args)
+
+    if len(args) != 2 :
+        sys.exit(p.print_help())
+    
+    tads, genes = args
+    fraction = opts.fraction
+    check_file_exists(tads)
+    check_file_exists(genes)
+    if 0 > float(fraction) > 1:
+        logging.error('The option `-F` must set in '
+            'range [0, 1], and you set {}'.format(fraction))
+        sys.exit()
+
+    bedtools_cmd = "bedtools intersect -a {} -b {} -wao -F {} | cut -f 1-3,7 ".format(
+        tads, genes, fraction)
+    db = OrderedDict()
+        
+    for line in os.popen(bedtools_cmd):
+        line_list = line.strip().split()
+        ID = chrRangeID(line_list[:3])
+        gene = line_list[3]
+        if ID not in db:
+            db[ID] = []
+        db[ID].append(gene)
+    
+    for ID in db:
+        gene_list = db[ID]
+        length = len(gene_list) if "." not in gene_list else 0
+        print("\t".join(chrRangeID(ID, axis=1)) + "\t" + \
+            ",".join(gene_list) + "\t" + \
+            str(length), file=sys.stdout)
     
 
+
+def whichTAD(args):
+    """
+    %prog gene.bed tad.bed Options
+    
+    find gene location in tads
+    """
+    p = OptionParser(annotate.__doc__)
+    p.add_option('-f', dest='fraction', default='0.7', 
+                    help='the fraction of gene overlap of tads')
+
+    opts, args = p.parse_args(args)
+
+    if len(args) != 2 :
+        sys.exit(p.print_help())
+    
+    genes, tads = args
+    fraction = opts.fraction
+    check_file_exists(tads)
+    check_file_exists(genes)
+    if 0 > float(fraction) > 1:
+        logging.error('The option `-f` must set in '
+            'range [0, 1], and you set {}'.format(fraction))
+        sys.exit()
+
+    bedtools_cmd = "bedtools intersect -a {} -b {} -wao -f {} | cut -f 4-8 ".format(
+        genes, tads, fraction)
+    for line in os.popen(bedtools_cmd):
+        print(line.strip())
+    """
+    db = OrderedDict()
+        
+    for line in os.popen(bedtools_cmd):
+        line_list = line.strip().split()
+        gene = line_list[0]
+        ID = chrRangeID(line_list[1:4])
+        
+        if ID not in db:
+            db[ID] = []
+        db[ID].append(gene)
+    """
+    """
+    for ID in db:
+        gene_list = db[ID]
+        length = len(gene_list) if "." not in gene_list else 0
+        print("\t".join(chrRangeID(ID, axis=1)) + "\t" + \
+            ",".join(gene_list) + "\t" + \
+            str(length), file=sys.stdout)
+    """
 if __name__ == "__main__":
     main()

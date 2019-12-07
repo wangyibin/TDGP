@@ -80,8 +80,9 @@ def debug(level=logging.DEBUG):
     Basic config logging format
     """
     from TDGP.apps.font import magenta, green, yellow, white
-    formats = white("%(asctime)s <%(module)s>")
-    formats += magenta(" [%(levelname)s]")
+    formats = white("%(asctime)s") 
+    formats += magenta(" <%(module)s>")
+    formats += white(" [%(levelname)s]")
     formats += yellow(" %(message)s")
     logging.basicConfig(level=level, format=formats, datefmt="[%Y-%m-%d %H:%M:%S]")
 
@@ -89,15 +90,18 @@ def debug(level=logging.DEBUG):
 debug()
 
 def main():
-    pass
-
+    actions = (
+        ('debug', 'debug'),
+    )
+    p = ActionDispatcher(actions)
+    p.dispatch(globals())
 
 def dmain(mainfile, type="action"):
     """
     modify from https://github.com/tanghaibao/jcvi/blob/master/jcvi/apps/base.py
     """
     cwd = op.dirname(mainfile)
-    pyscripts = [x for x in glob(op.join(cwd, "*", '__main__py'))] \
+    pyscripts = [x for x in glob(op.join(cwd, "*", '__main__.py'))] \
         if type == "module" \
         else glob(op.join(cwd, "*.py"))
     actions = []
@@ -142,7 +146,7 @@ class ActionDispatcher(object):
     """
 
     def __init__(self, actions):
-
+        
         self.actions = actions
         if not actions:
             actions = [(None, None)]
@@ -151,7 +155,7 @@ class ActionDispatcher(object):
     def get_meta(self):
         args = splitall(sys.argv[0])[-3:]
         args[-1] = args[-1].replace(".py", "")
-        if args[-2] == "bioway":
+        if args[-2] == "TDGP":
             meta = "MODULE"
         elif args[-1] == "__main__":
             meta = "SCRIPT"
@@ -294,6 +298,7 @@ class Line(object):
         return self.sep.join(self.line_list)
 
 
+## some util functions ##
 def listify(item):
     """
     To return a list or tuple value.
@@ -302,3 +307,13 @@ def listify(item):
     return item if (isinstance(item, list) or 
                    isinstance(item, tuple)) else [item]
 
+def check_file_exists(infile, ifcontinue=False):
+    if not op.exists(infile):
+        
+        if not ifcontinue:
+            logging.error('No such file of `{}'.format(infile))
+            sys.exit()
+        else:
+            logging.warn()('No such file of `{}, but will continue'.format(infile))
+    else:
+        logging.debug('Read file of `{}`'.format(infile))

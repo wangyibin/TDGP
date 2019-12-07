@@ -2,10 +2,10 @@
 # -*- coding:utf-8 -*-
 
 """
-TDGP, the libraries of 3D genome pipeline.
+TDGP, the libraries of Three Dimension Genome Pipeline.
 """
 
-from TDGP.apps.base import dmain
+from .apps.base import dmain
 
 
 if __name__ == "__main__":

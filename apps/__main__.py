@@ -4,7 +4,7 @@
 """
 The apps of the TDGP package.
 """
-from TDGP.apps.base import dmain
+from ..apps.base import dmain
 
 
 if __name__ == "__main__":

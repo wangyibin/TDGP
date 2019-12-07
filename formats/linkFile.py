@@ -8,9 +8,9 @@ import os.path as op
 
 from collections import OrderedDict
 from intervaltree import Interval, IntervalTree
-from TDGP.apps.base import BaseFile, Line
+from ..apps.base import BaseFile, Line
 
-from TDGP.apps.base import debug
+from ..apps.base import debug
 
 debug()
 
@@ -23,7 +23,7 @@ class LinkLine(Line):
     def __init__(self, line):
         super(LinkLine, self).__init__(line)
 
-        assert len(self.line_list) >= 6, \
+        assert len(self.line_list) <= 6, \
             "This Line is not a normal linkfile line. Please check file."
         (self.chrom1, self.start1, self.end1,
          self.chrom2, self.start2, self.end2) = self.line_list[:6]
@@ -98,6 +98,8 @@ class LinkFile(BaseFile):
 
 
         """
+    
+
         assert axis == 0 or axis == 1, \
             "The axis must bewtein 0 and 1."
         self.LinkDict = OrderedDict()
@@ -111,3 +113,7 @@ class LinkFile(BaseFile):
 
         return self.LinkDict
 
+
+if __name__ == "__main__":
+    main()
+    
