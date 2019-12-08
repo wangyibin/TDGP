@@ -315,5 +315,7 @@ def check_file_exists(infile, ifcontinue=False):
             sys.exit()
         else:
             logging.warn()('No such file of `{}, but will continue'.format(infile))
+        return False
     else:
         logging.debug('Read file of `{}`'.format(infile))
+        return True
