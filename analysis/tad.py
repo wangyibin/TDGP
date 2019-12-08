@@ -37,7 +37,9 @@ def main():
         ('getBoundaryBed', 'get tad boundary'), 
         ('testPipe', 'testPipe'),
         ('annotate', 'annotate tad'),
-        ('whichTAD', 'find gene location in TADs')
+        ('whichTAD', 'find gene location in TADs'),
+        ('getSyntenicTADs', 'get syntenic tads'),
+        ('test', 'test')
     )
     p = ActionDispatcher(actions)
     p.dispatch(globals())
@@ -373,8 +375,31 @@ class TADConserved(object):
 
         return result
     
+    
     @staticmethod
-    def getGene(tads, genes, fraction=0.7):
+    def getGene(tads, genes, fraction=0.7, isnum=False, isPlot=False):
+        """
+        Annotate tads with genes and return as dict.
+
+        Params:
+        --------
+        tads: `str` bed3 file of tad
+        genes: `str` bed4 file of gene
+        fraction: `str` or `float` fraction of gene 
+                    overlap with tads [default: 0.7]
+        isnum: `bool` if set output the gene number instead 
+                    of gene list. [default: False]
+        isPlot: `bool` if plot the gene number per TADs 
+                    distribution. [default: False]
+
+        Returns:
+        --------
+        out: `dict` dictionary of TADs annotation
+
+        Examples:
+        --------
+        >>> db = TADConserved().getGene("tad.bed", "gene.bed")
+        """
         check_file_exists(tads)
         check_file_exists(genes)
         if 0 > float(fraction) > 1:
@@ -382,8 +407,8 @@ class TADConserved(object):
                 'range [0, 1], and you set {}'.format(fraction))
             sys.exit()
 
-        bedtools_cmd = "bedtools intersect -a {} -b {} -wao -F {} |"
-                        " cut -f 1-3,7 ".format(tads, genes, fraction)
+        bedtools_cmd = "bedtools intersect -a {} -b {} -wao -F {} | \
+                         cut -f 1-3,7 ".format(tads, genes, fraction)
         db = OrderedDict()
             
         for line in os.popen(bedtools_cmd):
@@ -391,13 +416,148 @@ class TADConserved(object):
             ID = chrRangeID(line_list[:3])
             gene = line_list[3]
             if ID not in db:
-                db[ID] = []
-            db[ID].append(gene)
+                db[ID] = set()
+            db[ID].add(gene)
         
-        for ID in db:
-            gene_list = db[ID]
+        if isnum:
+            for ID in db:
+                db[ID] = len(db[ID])
+        
+        if isPlot:
+            assert isnum, 'isnum must specify as True'
+            fig, ax = plt.subplots(figsize=(5, 5))
+            sns.distplot(db.values(), hist=False, kde=True, ax=ax)
+            ax.set_xticks(range(0, 41, 5))
+            ax.set_xlim(0, 40)
+            ax.set_xlabel('Gene number')
+            ax.set_ylabel('Frequence')
+            ax.set_title('Gene Number Distribution ({:,})'.format(
+                                                sum(db.values())))
+            plt.savefig('{}.gene_num_dist.pdf'.format(
+                    genes.rsplit('.', 1)[0]), dpi=300)
+            logging.debug('Successful to plot gene number distribution '
+                        '`{}.gene_num_dist.pdf`.'.format(genes.rsplit('.', 1)[0]))
+            
+
+        return db 
+    
+    @staticmethod
+    def genePairTAD(genes, tads, fraction=0.7):
+        """
+        Annotate tads with genes and return as dict.
+
+        Params:
+        --------
+        genes: `str` bed4 file of gene
+        tads: `str` bed3 file of tad
+        fraction: `str` or `float` fraction of gene 
+                    overlap with tads [default: 0.7]
+        
+        Returns:
+        --------
+        out: `dict` dictionary of TADs annotation
+
+        Examples:
+        --------
+        >>> db = TADConserved().getGene("gene.bed", "tad.bed")
+
+        """
+
+        check_file_exists(tads)
+        check_file_exists(genes)
+        if 0 > float(fraction) > 1:
+            logging.error('The option `-f` must set in '
+                'range [0, 1], and you set {}'.format(fraction))
+            sys.exit()
+
+        bedtools_cmd = "bedtools intersect -a {} -b {} -wao -f {} | cut -f 4-7 ".format(
+            genes, tads, fraction)
+        db = OrderedDict()
+        for line in os.popen(bedtools_cmd):
+            line_list = line.strip().split()
+            gene, chrom, start, end = line_list
+            ID = chrRangeID([chrom, start, end]) if chrom != "." \
+                else "."
+            if ID == ".":
+                continue
+            
+            db[gene] = ID
         
         return db
+
+    @staticmethod
+    def getConserved(tad1, tad2, syngene1, syngene2, 
+                gene1, gene2, anchors, fraction=0.7, 
+                threshold=0, gene_num=0, synthre=0):
+        """
+        Get all syntenic TADs between two species.
+        
+        out: tad1 tad2 geneNum1 geneNum2 synNum1 synNum2 \
+            genePer1 genePer2 synPer1 synPer2 geneList1 geneList2
+        
+        >>> tc = TADConserved
+        >>> tc.getConserved(tad1, tad2, syngene1, syngene2, gene1, gene2, anchor)
+        ...
+        """
+        logging.debug('Start ...')
+        check_file_exists(anchors)
+        tc = TADConserved()
+        tadSynGeneNum1 = tc.getGene(tad1, syngene1, fraction, isnum=True)
+        tadSynGeneNum2 = tc.getGene(tad2, syngene2, fraction, isnum=True)
+        tadGeneNum1 = tc.getGene(tad1, gene1, fraction, isnum=True)
+        tadGeneNum2 = tc.getGene(tad2, gene2, fraction, isnum=True)
+        geneTAD1 = tc.genePairTAD(syngene1, tad1, fraction)
+        geneTAD2 = tc.genePairTAD(syngene2, tad2, fraction)
+        
+        db = OrderedDict()
+        with open(anchors, 'r') as fp:
+            for line in fp:
+                if line[0] == "#":
+                    continue
+                gene1, gene2, length = line.strip().split()
+
+                try:
+                    anchor1 = geneTAD1[gene1]
+                    anchor2 = geneTAD2[gene2]
+                except KeyError:
+                    continue
+                if anchor1 not in db:
+                    db[anchor1] = OrderedDict()
+                if anchor2 not in db[anchor1]:
+                    db[anchor1][anchor2] = []
+                db[anchor1][anchor2].append((gene1, gene2))
+        header = ('#tad1', 'tad2', 
+                    'total_gene_num1', 'total_gene_num2', 
+                    'syn_gene_num1', 'syn_gene_num2',
+                    'gene_per1', 'gene_per2',
+                    'syngene_per1', 'syngene_per2',
+                    'gene_list1', 'gene_list2')
+        print("\t".join(header), file=sys.stdout)      
+        for anchor1 in db:
+            for anchor2 in db[anchor1]:
+                tmp = np.array(db[anchor1][anchor2])
+                geneNum1 = tadGeneNum1[anchor1]
+                geneNum2 = tadGeneNum2[anchor2]
+                synGeneNum1 = tadSynGeneNum1[anchor1]
+                synGeneNum2 = tadSynGeneNum2[anchor2]
+                genePer1 = len(tmp[:, 0]) * 1.0 / geneNum1
+                genePer2 = len(tmp[:, 1]) * 1.0 / geneNum2
+                synGenePer1 = len(tmp[:, 0]) * 1.0 / synGeneNum1
+                synGenePer2 = len(tmp[:, 1]) * 1.0 / synGeneNum2
+                if genePer1 >= threshold and genePer2 >= threshold and \
+                        geneNum1 >= gene_num and geneNum2 >= gene_num and \
+                            synGeneNum1 >= synthre and synGeneNum2 >= synthre:
+                
+                    print("\t".join(map(str, (anchor1, anchor2, geneNum1, 
+                    geneNum2, synGeneNum1, synGeneNum2, genePer1, genePer2, 
+                    synGenePer1, synGenePer2, ",".join(tmp[:, 0]), 
+                    ",".join(tmp[:, 1])))), file=sys.stdout)
+        logging.debug('Done')
+
+def test(args):
+    tad1, tad2, syngene1, syngene2, gene1, gene2, anchor = args
+    TADConserved.getConserved(tad1, tad2, syngene1, syngene2, gene1, gene2, anchor)
+    
 
 ### outsite command start ###
 def getBottom(args):
@@ -560,7 +720,11 @@ def annotate(args):
     p = OptionParser(annotate.__doc__)
     p.add_option('-F', dest='fraction', default='0.7', 
                     help='the fraction of gene overlap of tads')
-
+    p.add_option('--isnum', default=False, action='store_true',
+                    help='if output the gene number [default: %default]')
+    p.add_option('--plot', default=False, action='store_true',
+                    help='if plot the gene number '
+                    'distribution [default: %default]')
     opts, args = p.parse_args(args)
 
     if len(args) != 2 :
@@ -568,27 +732,12 @@ def annotate(args):
     
     tads, genes = args
     fraction = opts.fraction
-    check_file_exists(tads)
-    check_file_exists(genes)
-    if 0 > float(fraction) > 1:
-        logging.error('The option `-F` must set in '
-            'range [0, 1], and you set {}'.format(fraction))
-        sys.exit()
-
-    bedtools_cmd = "bedtools intersect -a {} -b {} -wao -F {} | cut -f 1-3,7 ".format(
-        tads, genes, fraction)
-    db = OrderedDict()
-        
-    for line in os.popen(bedtools_cmd):
-        line_list = line.strip().split()
-        ID = chrRangeID(line_list[:3])
-        gene = line_list[3]
-        if ID not in db:
-            db[ID] = []
-        db[ID].append(gene)
-    
+    db = TADConserved().getGene(tads, genes, fraction, 
+                    opts.isnum, opts.plot) 
+    if opts.isnum:
+        return 
     for ID in db:
-        gene_list = db[ID]
+        gene_list = sorted(db[ID])
         length = len(gene_list) if "." not in gene_list else 0
         print("\t".join(chrRangeID(ID, axis=1)) + "\t" + \
             ",".join(gene_list) + "\t" + \
@@ -624,25 +773,56 @@ def whichTAD(args):
         genes, tads, fraction)
     for line in os.popen(bedtools_cmd):
         print(line.strip())
+
+
+def getSyntenicTADs(args):
     """
-    db = OrderedDict()
-        
-    for line in os.popen(bedtools_cmd):
-        line_list = line.strip().split()
-        gene = line_list[0]
-        ID = chrRangeID(line_list[1:4])
-        
-        if ID not in db:
-            db[ID] = []
-        db[ID].append(gene)
+    %prog tad1.bed tad2.bed synteny1.bed synteny2.bed 
+        gene1.bed gene2.bed 1.2.anchors [Options]
+    %prog species1 species2
+        Cautions: if input species, these file should exists
+                `species1.tad.bed`,  tad bed3
+                `species2.tad.bed`,
+                `species1.synteny.bed`, synteny gene bed4
+                `species2.synteny.bed`,
+                `species1.bed`, all gene bed4
+                `species2.bed`,
+                `species1.species2.anchors`. synteny anchors file
+
+    To get syntenic TADs table, default is not filter ouput all result.
     """
-    """
-    for ID in db:
-        gene_list = db[ID]
-        length = len(gene_list) if "." not in gene_list else 0
-        print("\t".join(chrRangeID(ID, axis=1)) + "\t" + \
-            ",".join(gene_list) + "\t" + \
-            str(length), file=sys.stdout)
-    """
+    p = OptionParser(getSyntenicTADs.__doc__)
+    p.add_option('--fraction', default='0.7', 
+            help='fraction of gene overlap with '
+                'TADs [defalut: %default]')
+    p.add_option('--threshold', default=0, type=float,
+            help='the threshold of non-change syn-gene / total gene num'
+                '[default: %default]')
+    p.add_option('--gene_num', default=0, type=int, 
+            help='the least gene number of TAD [default: %default]')
+    p.add_option('--synthre', default=0, type=float,
+            help='the threshold of non-change syn-gene / syn-gene num')
+    
+    opts, args = p.parse_args(args)
+    if len(args) == 2:
+        logging.debug('less args mode, Input two species prefix')
+        species1, species2 = args
+        tad1 = species1 + ".tad.bed"
+        tad2 = species2 + ".tad.bed"
+        syngene1 = species1 + '.synteny.bed'
+        syngene2 = species2 + '.synteny.bed'
+        gene1 = species1 + '.bed'
+        gene2 = species2 + '.bed'
+        anchor = species1 + '.' + species2 + '.anchors'
+    
+    elif len(args) == 7:
+        tad1, tad2, syngene1, syngene2, gene1, gene2, anchor = args
+    else:
+        sys.exit(p.print_help())
+    
+    TADConserved.getConserved(tad1, tad2, syngene1, syngene2, 
+                gene1, gene2, anchor, opts.fraction, opts.threshold,
+                opts.gene_num, opts.synthre)
+                
 if __name__ == "__main__":
     main()
