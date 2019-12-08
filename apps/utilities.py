@@ -33,3 +33,17 @@ def chrRangeID(args, axis=0):
         return chrom, start, end
     else:
         return 
+
+
+def dictCounter(inDict):
+    """
+    To count dict list value num.
+    Examples:
+    -------
+    >>> d = {1: [1,3], 2: [1]}
+    >>> dictCounter(d)
+    {1: 2, 2: 1}
+    """
+    for item in inDict:
+        inDict[item] = len(inDict[item])
+    return inDict
