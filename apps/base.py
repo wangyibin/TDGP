@@ -81,7 +81,7 @@ def debug(level=logging.DEBUG):
     """
     from TDGP.apps.font import magenta, green, yellow, white
     formats = white("%(asctime)s") 
-    formats += magenta(" <%(module)s>")
+    formats += magenta(" <%(module)s:%(funcName)s>")
     formats += white(" [%(levelname)s]")
     formats += yellow(" %(message)s")
     logging.basicConfig(level=level, format=formats, datefmt="[%Y-%m-%d %H:%M:%S]")
