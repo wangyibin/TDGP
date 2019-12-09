@@ -39,6 +39,7 @@ def main():
         ('annotate', 'annotate tad'),
         ('whichTAD', 'find gene location in TADs'),
         ('getSyntenicTADs', 'get syntenic tads'),
+        ('plotBoundary', 'plot omics data density in boundary'),
         ('test', 'test')
     )
     p = ActionDispatcher(actions)
@@ -585,10 +586,10 @@ def getBoundaryBed(args):
     get a bed file of the tad boundary.
     """
     p = OptionParser(getBoundaryBed.__doc__)
-    p.add_option('-a', '--up', type=int, default=250,
+    p.add_option('-a', '--up', type=int, default=0,
             help='the upstrean distance of boundary '
             '[default: %default]')
-    p.add_option('-b', '--down', type=int, default=250,
+    p.add_option('-b', '--down', type=int, default=1,
             help='the downstream distance of boundary '
             '[default: %default]')
     
@@ -597,6 +598,7 @@ def getBoundaryBed(args):
         sys.exit(p.print_help())
 
     tadFile, chromSize = args
+    check_file_exists(chromSize)
     up, down = opts.up, opts.down
     if not op.exists(tadFile) or not \
             op.exists(chromSize):
@@ -608,9 +610,10 @@ def getBoundaryBed(args):
     tf.getBoundaryDict()
     boundaryBed = tf.getBoundaryBed(tf.boundaryDict, chrom_dict, 
             up, down)
+    
     for item in sorted(boundaryBed):
         print("\t".join(map(str, item[:3])))
-
+    logging.debug('Successful output boundary bed')
 
 
 
@@ -823,6 +826,56 @@ def getSyntenicTADs(args):
     TADConserved.getConserved(tad1, tad2, syngene1, syngene2, 
                 gene1, gene2, anchor, opts.fraction, opts.threshold,
                 opts.gene_num, opts.synthre)
-                
+
+def plotBoundary(args):
+    """
+    %prog boundary.bed data.bw samplelabel [options]
+        To plot omics data density in tads boundary.
+    """
+    p = OptionParser(plotBoundary.__doc__)
+    p.add_option('-b', dest='up', default=50000, type=int, 
+            help='upstream distance of boundary [default: %default]')
+    p.add_option('-a', dest='down', default=50000, type=int,
+            help='downstream distance of boundary [default: %default]')
+    p.add_option('--binSize', default=1000, type=int,
+            help='calculate binSize [default: %default]')
+    p.add_option('-p', '--process', default=4, type=int, 
+            help='process of program [default:%default]')
+
+    opts, args = p.parse_args(args)
+    if len(args) != 3:
+        sys.exit(p.print_help())
+    
+    boundary, data, label = args
+    check_file_exists(boundary)
+    check_file_exists(data)
+    up = opts.up
+    down = opts.down
+    binSize = opts.binSize
+    process = opts.process
+
+    prefix = op.basename(boundary).replace('.bed', '')
+    compute_cmd = """
+    computeMatrix reference-point -S {data} -R {boundary} \\
+        --referencePoint center -b {up} -a {down} --binSize {binSize} \\
+            --samplesLabel {label} -p {process} --missingDataAsZero \\
+                --skipZeros -o {prefix}_{label}.matrix.gz\\
+                    --outFileSortedRegions {prefix}_{label}.bed
+    """.format(data=data, boundary=boundary, binSize=binSize, up=up,
+                down=down, label=label, prefix=prefix, process=process)
+    
+    plot_cmd = """
+     plotProfile -m {prefix}_{label}.matrix.gz --refPointLabel Boundary \\
+         -out {prefix}_{label}.pdf --plotHeight 10 --plotWidth 12 
+    """.format(prefix=prefix, label=label)
+
+    with open('run_{}_{}.sh'.format(prefix, label), 'w') as out:
+        out.write(compute_cmd + "\n")
+        out.write(plot_cmd)
+    logging.debug('Starting plot {} density in boundary'.format(label))
+    os.system('sh run_{}_{}.sh'.format(prefix, label))
+    logging.debug('Done, picture is `{prefix}_{label}.pdf`'.format(
+            prefix=prefix, label=label))
+        
 if __name__ == "__main__":
     main()
