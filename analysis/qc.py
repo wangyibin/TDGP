@@ -7,6 +7,7 @@ Hi-C analysis quality control, such as IDE ...
 
 from __future__ import print_function
 
+import argparse
 import logging
 import numpy as np
 import matplotlib as mpl 
@@ -31,6 +32,7 @@ def main():
 
     actions = (
             ("plotDistDensity", "Plot the IDE"),
+            ("plotIDEMulti", 'plot multi sample IDE'),
         )
     p = ActionDispatcher(actions)
     p.dispatch(globals())
@@ -221,7 +223,8 @@ class ValidPairs(BaseFile):
         return self.cis_dist_db
     
     @classmethod
-    def plotDistDensity(self, distance_db, out, perchrom=True, scale=100000):
+    def plotDistDensity(self, distance_db, out, perchrom=True, scale=100000,
+            xmin=1e5, xmax=2e7):
         """
         Plot the density of contact distance per chromosome or whole chromosome
         
@@ -242,12 +245,12 @@ class ValidPairs(BaseFile):
         >>> out = 'ide.pdf'
         >>> plotDistDensity(distance_db, out)
         """
-
+        single_color = '#209093'
         plt.figure(figsize=(5, 5))
         if perchrom:
             for chrom in distance_db: 
                 data = np.array(distance_db[chrom]) // scale * scale
-                data = data[(data >= 1e5) & (data <= 2e7)]
+                data = data[(data >= xmin) & (data <= xmax)]
                 unique, counts = np.unique(data, return_counts=True)
                 db = OrderedDict(zip(unique, counts))
                 plt.plot(db.keys(), db.values(), label=chrom)
@@ -255,16 +258,19 @@ class ValidPairs(BaseFile):
         else:
             data = list(chain(*list(distance_db.values())))
             data = np.array(data) // scale * scale
-            data = data[(data >= 1e5) & (data <= 2e7)]
+            data = data[(data >= xmin) & (data <= xmax)]
             unique, counts = np.unique(data, return_counts=True)
             db = OrderedDict(zip(unique, counts))
-            plt.plot(db.keys(), db.values(), label='all chromosome')
+            plt.plot(db.keys(), db.values(), label='all chromosome', color=single_color)
             plt.legend(loc='best')
-        plt.ylabel('$\log_{10}$ (contact frequency)')
-        plt.xlabel( '(distance)')
+        #plt.xlim(xmin, xmax)
+        plt.ylabel('Contact probability')
+        plt.xlabel('Distance (bp)')
         plt.yscale('log')
         plt.xscale('log')
         plt.savefig(out, dpi=300, bbox_inches='tight')
+        logging.debug('Successful, picture is in `{}`'.format(out))
+
 
 ## outside command ##
 def plotDistDensity(args):
@@ -279,7 +285,10 @@ def plotDistDensity(args):
             help='whether to plot per chromosome [default: %default]')
     p.add_option('-s', '--scale', default=100000, type=int,
             help='the scale of data [default: %default]')
-    
+    p.add_option('--xmin', default=1e5, type=int,
+            help='min value of xtick [default: %default]')
+    p.add_option('--xmax', default=2e7, type=int, 
+            help='max value of xtick [default: %default]')
     opts, args = p.parse_args(args)
 
     if len(args) != 2:
@@ -292,8 +301,62 @@ def plotDistDensity(args):
         chrom = opts.chrom
     vp = ValidPairs(pairsFile)
     distance_db = vp.getCisDistance(chrom=chrom)
-    print(opts.perchr)
-    vp.plotDistDensity(distance_db, out, perchrom=opts.perchr, scale=opts.scale)
+    vp.plotDistDensity(distance_db, out, perchrom=opts.perchr, scale=opts.scale,
+            xmin=opts.xmin, xmax=opts.xmax)
+
+
+def plotIDEMulti(args):
+    """
+    %(prog) 1.ValidPairs 2.ValidPairs ... [Options]
+        To multi sample IDE in a picture.
+    """
+    p = p=argparse.ArgumentParser(prog=plotIDEMulti.__name__,
+                        description=plotIDEMulti.__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('validpairs', nargs="+", 
+            help='validpairs file')
+    pReq.add_argument('--labels', nargs='+', required=True,
+            help='lable for legend')
+    pReq.add_argument('-o', '--out', required=True,
+            help='output file')
+    pOpt.add_argument('--scale', default=100000, type=int, metavar='int',
+            help='the scale of data [default: %(default)]')
+    p.add_argument('--xmin', default=1e5, type=int, metavar='int',
+            help='min value of xtick [default: %(default)]')
+    p.add_argument('--xmax', default=2e7, type=int, metavar='int',
+            help='max value of xtick [default: %(default)]')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    
+    args = p.parse_args(args)
+    scale = args.scale
+    xmin = args.xmin
+    xmax = args.xmax
+    out = args.out
+    fig, ax = plt.subplots(figsize=(5, 5))
+
+    assert len(args.validpairs) == len(args.labels), \
+        'input validpair file must equal to labels'
+    for validpair, label in zip(args.validpairs, args.labels):
+        vp = ValidPairs(validpair)
+        distance_db = vp.getCisDistance()
+        data = list(chain(*list(distance_db.values())))
+        data = np.array(data) // scale * scale
+        data = data[(data >= xmin) & (data <= xmax)]
+        unique, counts = np.unique(data, return_counts=True)
+        db = OrderedDict(zip(unique, counts))
+        plt.plot(db.keys(), db.values(), label=label)
+    plt.legend(loc='best')
+    #plt.xlim(xmin, xmax)
+    plt.ylabel('Contact probability')
+    plt.xlabel('Distance (bp)')
+    plt.yscale('log')
+    plt.xscale('log')
+    plt.savefig(out, dpi=300, bbox_inches='tight')
+    logging.debug('Successful, picture is in `{}`'.format(out))
+
 
 if __name__ == "__main__":
     main()
