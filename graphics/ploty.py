@@ -11,12 +11,17 @@ import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 
-
 import os
 import os.path as op
 import sys
 
 
+class Venn(object):
+    COLOR2 = ()
+        
+    def __init__(self):
+        pass
 
-class T():
-    pass
+    @staticmethod
+    def plotVenn2(F):
+        pass

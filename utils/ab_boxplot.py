@@ -73,7 +73,7 @@ def ab_boxplot(a_data, b_data, chrom, ax):
     else:
         y1 = min_upper + max_upper/10
         y2 = max_upper + max_upper/10
-
+    ax.set_xticks([1, 2])
     ax.set_xticklabels(['A', 'B'], fontsize=12)
     ax.set_xlabel(chrom, fontsize=14)
     ax.set_ylim((min_bottom - max_upper/5, max_upper + max_upper/2))

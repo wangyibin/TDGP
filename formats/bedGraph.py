@@ -3,6 +3,7 @@
 
 
 import logging
+import numpy as np
 import os
 import os.path as op
 import sys
@@ -81,6 +82,7 @@ class BedGraph(BaseFile):
         self.chromList = list(self.bedGraphDict.keys())
         _binSize, = list(self.bedGraphDict.values())[0][0]
         self.binSize = _binSize.length()
+        self.getValues()
         
     def getLine(self):
         with open(self.infile) as fp:
@@ -90,6 +92,18 @@ class BedGraph(BaseFile):
     def __iter__(self):
         for bgl in self.getLine():
             yield bgl
+
+    def getValues(self, chroms=[]):
+        """
+        get a array of all pc1 or some chromosomes' pc1.
+        """
+        chroms = chroms if chroms else self.chromList
+        self.values = OrderedDict()
+        for chrom in chroms:
+            self.values[chrom] = [i.data for i in self.bedGraphDict[chrom]]
+        
+        #self.values = np.concatenate(self.values)
+        return self.values
 
 
     def get(self):

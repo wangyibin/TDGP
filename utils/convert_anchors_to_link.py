@@ -26,10 +26,13 @@ def convert_anchors(bed1, bed2, anchors, outfile):
     bed1 = create_bed_dict(bed1)
     bed2 = create_bed_dict(bed2)
     
+    block_num = 0
     out = open(outfile, 'w')
     with open(anchors) as fp:
         for line in fp:
             if line.startswith("#"):
+                block_num += 1
+                block = "block{}".format(block_num)
                 continue
 
             line_list = line.strip().split()
@@ -39,10 +42,10 @@ def convert_anchors(bed1, bed2, anchors, outfile):
                 continue
             #chrom1, start1, end1 = bed1[gene]
             #chrom2, start2, end2 = bed2[gene]
-            out.write('\t'.join(['\t'.join(bed1[gene1]), '\t'.join(bed2[gene2]), gene1, gene2]) + "\n")
+            out.write('\t'.join(['\t'.join(bed1[gene1]), '\t'.join(bed2[gene2]), gene1, gene2, block]) + "\n")
     
     out.close()
-    os.system("sort -V {0} > .{0}".format(outfile))
+    os.system("sort -k9 -k1 -k2 -V {0} > .{0}".format(outfile))
     os.rename(".%s"%outfile, outfile)
 
 

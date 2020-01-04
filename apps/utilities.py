@@ -7,6 +7,7 @@ utility libraries.
 
 from __future__ import print_function
 
+import cooler
 import os
 import os.path as op
 import sys
@@ -47,3 +48,19 @@ def dictCounter(inDict):
     for item in inDict:
         inDict[item] = len(inDict[item])
     return inDict
+
+
+
+def isCooler(filename):
+    """
+    judge a file if a cool
+    """
+    try:
+        c = cooler.Cooler(filename)
+    except IOError:
+        return False
+    else:
+        if isinstance(c, cooler.Cooler):
+            return True
+        else:
+            return False
