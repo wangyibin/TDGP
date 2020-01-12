@@ -1,0 +1,31 @@
+##########################################################################
+# This file is the default configuration of sentieon snakemake pipeline!
+# 
+##########################################################################
+
+## fastq folder path
+## all sample with correct extense will be run in this directory
+fastq_folder: 'fastq'
+
+## fasta file 
+fasta: 'fasta'
+## suffix of fastq file [default: ".fastq.gz"]
+ext: '.fastq.gz'
+## paired-end extension [default: ['_R1', '_R2']]
+reads: ['_R1', '_R2']
+## number of threads
+nt: 20
+
+pipeline: sentieon
+## sentieon release and license
+release_dir: '/public1/user_program/sentieon-genomics-201711'
+license: '/public1/user_program/sentieon-genomics-201711/Fujian_Agricultural_and_Forestry_University_cluster.lic'
+
+## workdir name [default: 'DNAseq_joint']
+workdir: 'DNAseq_joint'
+## logfile
+logfile: 'run.log'
+## platform [default: 'ILLUMINA']
+platform: 'ILLUMINA'
+
+
