@@ -1,5 +1,8 @@
 ## Snakemake Pipeline of Sentieon
 
+Snakemake pipeline of sentieon, this pipeline is only for call variants.
+![dag](https://github.com/wangyibin/TDGP/blob/master/pipeline/sentieon/dag.pdf)
+
 ### Tutorial
 1. method-1
 - configure file
