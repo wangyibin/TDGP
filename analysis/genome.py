@@ -261,6 +261,7 @@ class Genome(object):
                 self.gcBin[chrom][chromWindow-1] = self.getGC(chrom, 
             (chromWindow-1)*self.window, chromWindow*self.window, correct=correct)
         
+        logging.debug('Successful getGCBin')
         return self.gcBin
         
     def clearCache(self):
@@ -345,7 +346,7 @@ def getTSS(args):
                 print('\t'.join(map(str, (chrom, start, 
                             int(start) + 1))), file=out)
     
-    out = 'stdout' if isinstance(out, file) else out
+    out = 'stdout' if isinstance(out, str) else out
     logging.debug('Done, output is in `{}`'.format(out))
 
 
@@ -409,9 +410,9 @@ def calGC(args):
             help='size of calculation window [default: %default]')
     pOpt.add_argument('-o', '--out', type=argparse.FileType('w'), 
             default=sys.stdout, help='output file [default: %(default)s]')
-    pOpt.add_argument('--exclude', nargs="*", default=[],
+    pOpt.add_argument('--exclude', nargs="*", metavar='chrom', default=[],
             help='exclude these chromosome [default: %(default)s]')
-    pOpt.add_argument('--exclude_contig', nargs='*', 
+    pOpt.add_argument('--exclude_contig', metavar='tig', nargs='*', 
             default=['tig', 'scafflod', 'Un', 'Sy', 'Mt', 'Pt'], 
             help='exclude these chromosome if it contain these string'
                 ' [default: %(default)s]')

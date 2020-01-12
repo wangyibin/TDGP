@@ -38,7 +38,7 @@ def as_si(x, ndp):
 
 
 
-def ab_boxplot(a_data, b_data, chrom, ax):
+def ab_boxplot(a_data, b_data, chrom, ax, scale=100):
     
     # wi_test
     pvalue = wi_test(a_data[4], b_data[4])
@@ -52,12 +52,12 @@ def ab_boxplot(a_data, b_data, chrom, ax):
 
     #ax.set_title('Gene Density')
 
-    a = ax.boxplot(a_data[4]/100, showfliers=False, patch_artist=True, notch=True, widths=0.22,
+    a = ax.boxplot(a_data[4]/scale, showfliers=False, patch_artist=True, notch=True, widths=0.22,
                boxprops=boxprops_r, medianprops=medianprops, whiskerprops=whiskerprops)
     a_upper_extreme = [ item.get_ydata() for item in a['whiskers']][1][1]
     a_bottom_extreme = [ item.get_ydata() for item in a['whiskers']][0][1]
 
-    b = ax.boxplot([[], b_data[4]/100], showfliers=False, patch_artist=True, notch=True, widths=0.22,
+    b = ax.boxplot([[], b_data[4]/scale], showfliers=False, patch_artist=True, notch=True, widths=0.22,
                boxprops=boxprops_b, medianprops=medianprops, whiskerprops=whiskerprops)
     b_upper_extreme = [ item.get_ydata() for item in b['whiskers']][3][1]
     b_bottom_extreme = [ item.get_ydata() for item in b['whiskers']][2][1]
@@ -100,7 +100,7 @@ def read_bg(bgfile):
     return ab_data
 
 
-def plot(bgfile, title="Gene Density", outfile='ab_boxplot.pdf', chrom_list='all', column_num=4, 
+def plot(bgfile, scale=100, title="Gene Density", outfile='ab_boxplot.pdf', chrom_list='all', column_num=4, 
         draw_per_chrom=False, exclude=[],sort_func='lambda x: int(x[3:])'):
     
     import matplotlib as mpl
@@ -133,7 +133,7 @@ def plot(bgfile, title="Gene Density", outfile='ab_boxplot.pdf', chrom_list='all
         suptitle_props = dict(fontsize=16, x=0.5, y=0.95)
         a_data = ab_data[ab_data[3] > 0]
         b_data = ab_data[ab_data[3] < 0]
-        ab_boxplot(a_data, b_data, chrom, ax)
+        ab_boxplot(a_data, b_data, chrom, ax, scale)
     else:
         suptitle_props = dict(fontsize=24, x=0.5, y=1.04)
         chrom_list.sort(key=eval(sort_func))
@@ -146,7 +146,7 @@ def plot(bgfile, title="Gene Density", outfile='ab_boxplot.pdf', chrom_list='all
         for ax, chrom in zip(axs, chrom_list):
             a_data = ab_data[(ab_data[0] == chrom) & (ab_data[3] > 0)]
             b_data = ab_data[(ab_data[0] == chrom) & (ab_data[3] < 0)]
-            ab_boxplot(a_data,b_data, chrom, ax)
+            ab_boxplot(a_data,b_data, chrom, ax, scale)
 
     plt.suptitle(title, **suptitle_props)
     plt.savefig(outfile, dpi=300,bbox_inches='tight' )
@@ -174,6 +174,8 @@ if __name__ == "__main__":
     p.add_option('--exclude', default=[],
             help='list of chromosome which exclude, split by comma'
             '[default: %default]')
+    p.add_option('--scale', default=100, type=int, 
+            help='the scale of yticks [default: %default]')
     p.add_option('--sort_func', default='lambda x: int(x[3:])',
             help='chromosome name sort function [default: %default]')
 
@@ -190,6 +192,7 @@ if __name__ == "__main__":
     column_num = opts.column_num
     draw_per_chrom = opts.draw_per_chrom
     exclude = opts.exclude
+    scale = opts.scale
     sort_func = opts.sort_func
     
-    plot(bgfile,title, outfile, chrom_list,column_num, draw_per_chrom, exclude, sort_func)
+    plot(bgfile,scale, title, outfile, chrom_list,column_num, draw_per_chrom, exclude, sort_func)

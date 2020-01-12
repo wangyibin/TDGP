@@ -47,3 +47,13 @@ docs/_build/
 
 # gffuitls temp DB file
 *.db
+
+# snakemake
+snakejob*
+.snakemake/
+
+# DNAseq_joint
+DNAseq_joint/
+tmp/
+fastq
+

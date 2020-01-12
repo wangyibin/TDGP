@@ -40,3 +40,12 @@ class MyColor(object):
     posneg_r = tuple(reversed(list(posneg)))
     blrd = ("#89023E", "#b4b4b4")
     blrd_r = tuple(reversed(list(blrd)))
+
+
+# https://stackoverflow.com/questions/3380726/
+# converting-a-rgb-color-tuple-to-a-six-digit-code-in-python
+def clamp(x):
+    return max(0, min(x, 255))
+def rgb2hex(x):
+    r, g, b = x
+    return "#{0:02x}{1:02x}{2:02x}".format(clamp(r), clamp(g), clamp(b))

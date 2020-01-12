@@ -28,7 +28,7 @@ from TDGP.apps.base import debug, check_file_exists, listify
 from TDGP.apps.base import ActionDispatcher
 from TDGP.apps.utilities import isCooler
 from TDGP.formats.bedGraph import BedGraph
-
+from TDGP.graphics.ploty import change_width
 debug()
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -42,8 +42,10 @@ def main():
             ('plotMultiLineRegress', "plot two species pca1 lineregress per switch type"),
             ('plotEnrichment', 'plot compartment strength enrichment'),
             ('plotStrength', 'plot compartment strength in multi samples'),
+            ('plotSwitchPie', 'plot two samples switch type pie picture'),
             ('getSyntenyGenePca', "get the synteny gene pairs pca value"),
             ('annotateSwitchType', "annotate swithch type for synteny gene pairs"),
+            ('statAB', 'stat A/B compartments informations')
             
         )
     p = ActionDispatcher(actions)
@@ -142,8 +144,8 @@ class Compartment(object):
             cmatrix = cmatrix[:, mask]
 
             
-            gc = np.array(eig[genome.label2idx[chrom]]) if eig == 'GC' \
-                else np.array(eig[chrom])
+            gc = np.array(_eig[genome.label2idx[chrom]]) if eig == 'GC' \
+                else np.array(_eig[chrom])
             gc = gc[mask]
             if len(gc) > 5:
                 for i in range(5):
@@ -230,7 +232,7 @@ class ABComparisionSpecies(object):
         >>> ABC = ABComparisionSpecies()
         >>> ABC.getSyntenyGenePca(bg1, bg2, bed1, bed2)
         """
-        map(check_file_exists, (bg1, bg2, bed1, bed2))
+        list(map(check_file_exists, (bg1, bg2, bed1, bed2)))
         bedtools_formatter = "bedtools intersect -a {} -b {} -wao -f 0.5  |cut -f 1-4,8 > {}\n"
         out_formatter = "{}.synteny.eigen1.bg"
         cut_pca_formatter = "cut -f 5 {0}.synteny.eigen1.bg > {0}.pca1 \n"
@@ -245,7 +247,7 @@ class ABComparisionSpecies(object):
         cut_cmd2 = cut_pca_formatter.format(prefix2)
         paste_cmd = "paste {0}.synteny.eigen1.bg {1}.synteny.eigen1.bg > {0}-{1}.synteny.eigen1.bg\n".format(prefix1, 
                                                                             prefix2)
-        map(os.system, (bedtools_cmd1, bedtools_cmd2, cut_cmd1, cut_cmd2, paste_cmd))
+        list(map(os.system, (bedtools_cmd1, bedtools_cmd2, cut_cmd1, cut_cmd2, paste_cmd)))
         logging.debug('Successful to getSyntenyGenePca')
         
         synteny_pairs = '{0}-{1}.synteny.eigen1.bg'.format(prefix1, prefix2)
@@ -688,7 +690,7 @@ def annotateSwitchType(args):
             )
     pOpt.add_argument('-o', '--out', type=argparse.FileType('w'), 
             default=sys.stdout, help='output file [default: %(default)s]')
-    pOpt.add_argument('--same', action='store_true', default=True,
+    pOpt.add_argument('--same', action='store_true', default=False,
             help='if same species [default: %(default)s]')
     pOpt.add_argument('-h', '--help', action='help',
             help='show help message and exit.')
@@ -767,8 +769,8 @@ def plotEnrichment(args):
             help='the resolution of matrix')
     pReq.add_argument('-o', '--out', required=True, 
             help='out picture file.')
-    pOpt.add_argument('-t', '--thread', type=int, default=24,
-            help='the thread of programe [default: %(default)s]')
+    #pOpt.add_argument('-t', '--thread', type=int, default=24,
+    #        help='the thread of programe [default: %(default)s]')
     pOpt.add_argument('-c', '--chrom', nargs='*', default=[],
             help='only plot these chromosomes [default: %(default)s]')
     pOpt.add_argument('--exclude', nargs="*", default=[],
@@ -833,7 +835,7 @@ def plotEnrichment(args):
     for i, matrix in enumerate(data_list):
         strengthes, permutted = Compartment().getStrengthError(matrix, 
             eig[i], genome_list[i], args.window, correct=True, 
-            thread=args.thread, iterCorrect=False)
+            iterCorrect=False)
         ax = axes[i] if len(data_list) > 1 else axes
         ax.imshow(np.log(mysum(strengthes)), interpolation = 'none', 
                 cmap='coolwarm')
@@ -863,8 +865,8 @@ def plotStrength(args):
             help='the resolution of matrix')
     pReq.add_argument('-o', '--out', required=True, 
             help='out picture file.')
-    pOpt.add_argument('-t', '--thread', type=int, default=24,
-            help='the thread of programe [default: %(default)s]')
+    #pOpt.add_argument('-t', '--thread', type=int, default=24,
+    #        help='the thread of programe [default: %(default)s]')
     pOpt.add_argument('-c', '--chrom', nargs='*', default=[],
             help='only plot these chromosomes [default: %(default)s]')
     pOpt.add_argument('--exclude', nargs="*", default=[],
@@ -900,7 +902,8 @@ def plotStrength(args):
         genome = Genome(fasta, exclude=args.exclude, 
                 exclude_contig=args.exclude_contig)
         genome_list = [genome] * len(data_list)
-    elif len(genome_list) != len(data_list):
+   
+    elif len(args.genome) != len(data_list):
         logging.error('genome files must be equal to '
             'matrix files or set only one')
         sys.exit()
@@ -925,25 +928,76 @@ def plotStrength(args):
         import functools
         return functools.reduce(lambda x,y:x+y, x)
     
-    fig, axes = plt.subplots(1, len(data_list))
+    
     values = []
     errors = []
     for i, matrix in enumerate(data_list):
         strengthes, permutted = Compartment().getStrengthError(matrix, 
             eig[i], genome_list[i], args.window, correct=True, 
-            thread=args.thread, iterCorrect=True)
-        value, errorCompartment().calStrength(strengthes, permutted)
+             iterCorrect=True)
+        value, error = Compartment().calStrength(strengthes, permutted)
         values.append(value)
         errors.append(error)
-    index = np.arrange(len(values))
-    plt.bar(index, values, 0.8, yerr=errors, error_kw=dict(ecolor='0.3'))
-        #plt.colorbar()
     
+    print("values:", end="\t")
+    print("\t".join(map(str, values)))
+    print("errors:", end="\t")
+    print("\t".join(map(str, errors)))
+    names = list(map(lambda x: x.split('.')[0], args.matrix))
+    index = np.arange(len(values))
+    ax = sns.barplot(index, values, yerr=errors, error_kw=dict(ecolor='0.3'), 
+            palette=sns.color_palette('Set2'))
+    if 'GC' in args.eig :
+        ymax = max(values) + 0.1
+        plt.ylim(0, ymax)
+    ax.set_ylabel('Compartments Strength')
+    ax.set_xticklabels(names)
+    change_width(ax, .5)
     plt.savefig(args.out, dpi=300, bbox_inches='tight')
 
 
-  
+def statAB(args):
+    """
+    %(prog)s eigen1.bg
+
+        Stat A/B compartments per chromosome and total.
+
+    """
+    p = p=argparse.ArgumentParser(prog=statAB.__name__,
+                        description=statAB.__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('bg', 
+            help='input A/B compartments bedgraph file')
+    pOpt.add_argument('-o', '--out', type=argparse.FileType('w'), 
+            default=sys.stdout, help='output file [default: stdin]')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
     
+    args = p.parse_args(args)
+
+    bg = BedGraph(args.bg)
+    a_db = {chrom:0 for chrom in bg.chromList}
+    b_db = {chrom:0 for chrom in bg.chromList}
+
+    for chrom in bg.chromList:
+        for item in bg.bedGraphDict[chrom]:
+            size = item.end - item.begin
+            if item.data > 0:
+                a_db[chrom] += size
+            if item.data < 0:
+                b_db[chrom] += size
+        chromsize = bg.chromSizes[chrom]
+        a_size = a_db[chrom]
+        a_perc = a_size / chromsize
+        b_size = b_db[chrom]
+        b_perc = b_size / chromsize
+        print("\t".join(map(str, [chrom, a_size, a_perc, 
+                b_size, b_perc, chromsize])), file=args.out)
+        
+    
+    logging.debug('Successful ... output file is in `{}`'.format(args.out.name))
 
     
 

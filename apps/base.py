@@ -279,7 +279,7 @@ class BaseFile(object):
                 self.infile))
             sys.exit()
         else:
-            logging.debug('Loaded {} file.'.format(infile))
+            logging.debug('Loading {} file.'.format(infile))
 
 
 class Line(object):

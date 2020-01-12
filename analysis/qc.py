@@ -13,12 +13,14 @@ import numpy as np
 import matplotlib as mpl 
 mpl.use('Agg')
 import matplotlib.pyplot as plt
+import seaborn as sns
 import os
 import os.path as op
 import sys
 
 from collections import OrderedDict, defaultdict
 from itertools import chain
+from joblib import Parallel, delayed, Memory
 from optparse import OptionParser
 from TDGP.apps.base import ActionDispatcher
 from TDGP.apps.base import check_file_exists, debug
@@ -140,9 +142,12 @@ class ValidPairs(BaseFile):
     >>> vp.getLine():
     
     """
-    def __init__(self, infile):
+    def __init__(self, infile, mem_cache='.'):
         super(ValidPairs, self).__init__(infile)
         self.infile = infile
+        self.mem_cache = mem_cache
+        memory = Memory(self.mem_cache)
+        self.getCisDistance = memory.cache(self._getCisDistance)
         
     def getLine(self):
         """
@@ -197,7 +202,7 @@ class ValidPairs(BaseFile):
             if vpl.isTrans():
                 yield vpl
     
-    def getCisDistance(self, chrom=None):
+    def _getCisDistance(self, chrom=None):
         """
         Get all chromosome cis distance.
         
@@ -210,21 +215,25 @@ class ValidPairs(BaseFile):
         >>> vp.getCisDistance()
         {'Chr1': [32, 4434, 23223, ...], 'Chr2': [2342, ...]}
         """
-        cis_dist_db = defaultdict(list)
+        cis_dist_db = OrderedDict()
         
         for vpl in self.getCisLine():
             if chrom:
                 chrom = listify(chrom)
                 if vpl.chr1 in chrom:
+                    if vpl.chr1 not in cis_dist_db:
+                        cis_dist_db[vpl.chr1] = []
                     cis_dist_db[vpl.chr1].append(vpl.getCisDistance())
             else:
+                if vpl.chr1 not in cis_dist_db:
+                    cis_dist_db[vpl.chr1] = []
                 cis_dist_db[vpl.chr1].append(vpl.getCisDistance())
         self.cis_dist_db = cis_dist_db
         return self.cis_dist_db
     
     @classmethod
     def plotDistDensity(self, distance_db, out, perchrom=True, scale=100000,
-            xmin=1e5, xmax=2e7):
+            xmin=1e5, xmax=2e7, color=[]):
         """
         Plot the density of contact distance per chromosome or whole chromosome
         
@@ -245,15 +254,25 @@ class ValidPairs(BaseFile):
         >>> out = 'ide.pdf'
         >>> plotDistDensity(distance_db, out)
         """
-        single_color = '#209093'
+        if color:
+            color_pallete = listify(color)
+            single_color = listify(color)[0]
+        else:
+            single_color = '#209093'
+            if len(distance_db) <= 8:
+                color_pallete = sns.color_palette('Set2')
+            else:
+                color_pallete = sns.color_palette('hls', len(distance_db))
+        
         plt.figure(figsize=(5, 5))
         if perchrom:
-            for chrom in distance_db: 
+            for i, chrom in enumerate(distance_db): 
+                c = color_pallete[i % len(color_pallete)]
                 data = np.array(distance_db[chrom]) // scale * scale
                 data = data[(data >= xmin) & (data <= xmax)]
                 unique, counts = np.unique(data, return_counts=True)
                 db = OrderedDict(zip(unique, counts))
-                plt.plot(db.keys(), db.values(), label=chrom)
+                plt.plot(db.keys(), db.values(), label=chrom, color=c)
                 plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
         else:
             data = list(chain(*list(distance_db.values())))
@@ -287,8 +306,10 @@ def plotDistDensity(args):
             help='the scale of data [default: %default]')
     p.add_option('--xmin', default=1e5, type=int,
             help='min value of xtick [default: %default]')
-    p.add_option('--xmax', default=2e7, type=int, 
+    p.add_option('--xmax', default=2e8, type=int, 
             help='max value of xtick [default: %default]')
+    p.add_option('--color', default='', 
+            help='color palette')
     opts, args = p.parse_args(args)
 
     if len(args) != 2:
@@ -296,13 +317,23 @@ def plotDistDensity(args):
     
     pairsFile, out = args
     if opts.chrom:
-        chrom = opts.chrom.split(',')
+        if op.exists(opts.chrom):
+            chrom = [i.strip() for i in open(opts.chrom) if i.strip()]
+        else:
+            chrom = opts.chrom.split(',')
     else:
         chrom = opts.chrom
+    if opts.color:
+        if op.exists(opts.color):
+            color = [i.strip() for i in open(opts.color) if i.strip()]
+        else:
+            color = opts.color.split(',')
+    else:
+        color = opts.color
     vp = ValidPairs(pairsFile)
     distance_db = vp.getCisDistance(chrom=chrom)
     vp.plotDistDensity(distance_db, out, perchrom=opts.perchr, scale=opts.scale,
-            xmin=opts.xmin, xmax=opts.xmax)
+            xmin=opts.xmin, xmax=opts.xmax, color=color)
 
 
 def plotIDEMulti(args):
