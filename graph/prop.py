@@ -2,7 +2,7 @@
 # -*- coding:utf-8 -*-
 
 """
-Some colors or colormaps for plot.
+Some properties for plot, such as color, font, colormap.
 """
 
 from __future__ import print_function
@@ -17,6 +17,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from matplotlib.colors import LinearSegmentedColormap
+
+
+
+
 
 BlueBlackRed_dict = {
         'red':   ((0.0, 0.0, 0.0),

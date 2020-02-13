@@ -1,0 +1,57 @@
+#################################################################
+#
+#################################################################
+
+
+
+import sys
+
+
+matrix = config['matrix']
+bed = config['bed']
+genome = config['genome']
+prefix = bed.replace('_abs.bed', '')
+chrom_size = config['chrom_size']
+chrom_list = [i.strip().split()[0] for i in 
+                open(chrom_size) if i.strip()]
+
+rule all:
+    input:
+        expand("{chrom}_{prefix}.addedHeaders.matrix.gz", 
+            chrom=chrom_list, prefix=prefix)
+
+rule sparseToDense:
+    input:
+        bed,
+        matrix
+    output:
+        expand("dense/{chrom}_{prefix}.dense.matrix", 
+                chrom=chrom_list,prefix=prefix)
+    log:
+        "log/sparseToDense.log"
+    shell:
+        "sparseToDense.py -b {input[0]} {input[1]} -o {prefix}.dense.matrix -c && mkdir -p dense && mv *.dense.matrix dense 2 > {log}"
+
+rule header:
+    input:
+        bed
+    output:
+        expand("header/{chrom}_{bed}.header", chrom=chrom_list,
+            bed=bed)
+    log:
+        "log/header.log"
+    shell:
+        "python /public1/home/stu_wangyibin/code/TDGP/utils/cworld_header.py {input} {genome} -c && mkdir -p header && mv *.header header 2 > {log}"
+    
+
+rule addHeader:
+    input:
+        "dense/{sample}_{prefix}.dense.matrix",
+        #"header/{sample}_{bed}.header"
+       
+    output:
+        "{sample}_{prefix}.addedHeaders.matrix.gz"
+    log:
+        "log/addHeader.log"
+    shell:
+        "matrix2compartment.pl -i {input}"

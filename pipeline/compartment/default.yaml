@@ -1,0 +1,9 @@
+
+
+bed: 
+matrix:
+genome:
+chrom_size: 
+
+cworld_dir: "/public1/home/stu_wangyibin/software/cworld-dekker/scripts/util/geneDensity/"
+

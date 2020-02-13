@@ -15,7 +15,7 @@ import multiprocessing as mp
 
 def cacl_100bp_counts(infile, outfile=None):
     if not outfile:
-        outfile = infile.rsplit('_')[0]
+        outfile = infile.rsplit('.')[0] + ".100.counts"
     if not os.path.exists(outfile):
         cmd = """cat {} | awk '{{a[$2][int($3/100)]++;a[$5][int($6/100)]++}}END{{for (j in a) for (i in a[j]) printf "%s\\t%s\\t%d\\n",j,i,a[j][i]}}' > {}""".format(infile, outfile)
         print(cmd)
@@ -76,8 +76,8 @@ def dotplot(values, outprefix, percent=0.8):
     plt.xticks(range(0,101,10), map(lambda x: str(x), range(0, 101, 10)))
     plt.xlim(0,100)
     plt.ylim(0.0, 1.2)
-    plt.xlabel("Resolution (kb)")
-    plt.ylabel("Percent (X100%)")
+    plt.xlabel("Resolution (kb)", fontsize=12)
+    plt.ylabel("Percent (X100%)", fontsize=12)
     plt.title("Hi-C")
     plt.savefig('{}.pdf'.format(outprefix), dpi=300)
 

@@ -22,6 +22,7 @@ hic <- importC(opts$matrix, opts$bed)
 
 # Quality control
 CairoPDF('hitc_cqc.pdf')
+par(cfow=c(1, 1))
 CQC(hic, winsize = opts$binsize, dev.new=FALSE, hist.dist=FALSE)
 dev.off()
 

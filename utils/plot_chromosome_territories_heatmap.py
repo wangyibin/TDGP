@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
 # -*- coding:utf-8 -*-
 
+"""
+%(prog)s infile1 [infile2] -c chrom.sizes
 
+    plot the heatmap of chromosome trans interactions to 
+        show the chromosomal territories.
+    also can plot two allpairs files in a heatmap. 
+"""
+
+import argparse
 import numpy as np
 import os.path as op
 import sys
@@ -62,7 +70,7 @@ def get_whole_obs_exp_matrix(allpairs, chrom_list):
     for i, chrom1 in enumerate(chrom_list):
         chrom1_trans = sum(list(map(int, chrom_trans_nums[chrom1].values())))
         for j, chrom2 in enumerate(chrom_list):
-            if i==j :
+            if i==j:
                 continue
             chrom2_trans = sum(list(map(int, chrom_trans_nums[chrom2].values())))
             obs = float(chrom_trans_nums[chrom1][chrom2])
@@ -73,21 +81,36 @@ def get_whole_obs_exp_matrix(allpairs, chrom_list):
     return whole_obs_exp_matrix
 
 
+def merge_matrix(matrix1, matrix2):
+    """
+    merge two matrix to a matrix spearate by up and down triangle
+    """
+    down = np.tril(matrix1, k=-1)
+    up = np.triu(matrix2, k=1)
+    merge = up + down
+    return merge
+
+
+
 def plot_heatmap(whole_obs_exp_matrix, chrom_list, prefix,
-        color='coolwarm', valfmt='{x: .3f}'):
+        color='coolwarm', valfmt='{x: .3f}', figsize=(10, 10), 
+        vmin=0.2, vmax=-0.2):
     import matplotlib as mpl
     mpl.use('Agg')
     import matplotlib.pyplot as plt
     
+    # set xtickslabel move to the top
+    plt.rcParams['xtick.bottom'] = plt.rcParams['xtick.labelbottom'] = False
+    plt.rcParams['xtick.top'] = plt.rcParams['xtick.labeltop'] = True
 
-    fig, ax = plt.subplots(figsize=(10, 10))
-    im = ax.imshow(whole_obs_exp_matrix, cmap=color, vmax=0.13, vmin=-0.13)
+    fig, ax = plt.subplots(figsize=figsize)
+    im = ax.imshow(whole_obs_exp_matrix, cmap=color, vmax=vmax, vmin=vmin)
     ax.figure.colorbar(im, ax=ax,fraction=0.045 )
 
     ax.set_xticks(np.arange(len(chrom_list)))
-    ax.set_xticklabels(chrom_list)
+    ax.set_xticklabels(chrom_list, fontsize=14, rotation=45, ha='left')
     ax.set_yticks(np.arange(len(chrom_list)))
-    ax.set_yticklabels(chrom_list)
+    ax.set_yticklabels(chrom_list, fontsize=14)
 
     valfmt = mpl.ticker.StrMethodFormatter(valfmt)
 
@@ -104,13 +127,36 @@ def plot_heatmap(whole_obs_exp_matrix, chrom_list, prefix,
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("*"*79)
-        print("Usage: {} sample.allValidPairs chrom.list".format(op.basename(sys.argv[0])))
-        print("*"*79)
+    p=argparse.ArgumentParser(prog=op.basename(__file__),
+                        description=__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('infile', nargs="+", help='allValidpairs file')
+    pReq.add_argument('-c', '--chrom', help='the chromsome size file')
+    pOpt.add_argument('--vmin', type=float, default=-0.2, 
+            help="min value of heatmap [default: %(default)s]")
+    pOpt.add_argument('--vmax', type=float, default=0.2,
+            help='max value of heatmap [default: %(default)s]')
+    pOpt.add_argument('--figsize', type=str, default='(10, 10)', 
+            help='figsize of picture [default: %(default)s]')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    
+    args = p.parse_args()
+    chrom_list = get_chrom_list(args.chrom)
+    if len(args.infile) == 1: 
+        allpairs, = args.infile
+        matrix = get_whole_obs_exp_matrix(allpairs, chrom_list)
+        prefix = allpairs.split(".")[0]
+    elif len(args.infile) == 2:
+        allpairs1, allpairs2 = args.infile
+        matrix1 = get_whole_obs_exp_matrix(allpairs1, chrom_list)
+        matrix2 = get_whole_obs_exp_matrix(allpairs2, chrom_list)
+        matrix = merge_matrix(matrix1, matrix2)
+        prefix = allpairs1.split(".")[0] + "-" + allpairs2.split("_")[0]
+    else:
+        print('[Error]: infiles number should be 1 or 2')
         sys.exit()
-    allpairs, chrom_list = sys.argv[1:]
-    chrom_list = get_chrom_list(chrom_list)
-    matrix = get_whole_obs_exp_matrix(allpairs, chrom_list)
-    prefix = allpairs.split("_")[0]
-    plot_heatmap(matrix, chrom_list, prefix)
+    plot_heatmap(matrix, chrom_list, prefix, vmax=args.vmax, 
+            vmin=args.vmin, figsize=eval(args.figsize))

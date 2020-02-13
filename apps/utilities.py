@@ -64,3 +64,66 @@ def isCooler(filename):
             return True
         else:
             return False
+
+
+def chrom_size_convert(size):
+    """
+    Convert the unit of chromosome size to suitable unit.
+    >>> chrom_size_convert(100000)
+    100 Kbp
+    >>> chrom_size_convert(1000000)
+    1 Mbp
+    """
+    if size <= 1e3:
+        label = "{:,.0f}".format((size)) + " bp"
+    elif size <= 4e5:
+        label = "{:,.0f}".format((size / 1e3)) + " Kbp"
+    else:
+        label = "{:,.1f}".format((size / 1e6)) + " Mbp"
+    
+    return label
+
+
+def chrom_ticks_convert(ticks):
+    """
+    Convert a list of  chromosome size to suitable unit.
+    >>> ticks = [10000, 20000, 30000]
+    >>> chrom_ticks_convert(ticks)
+    ['10', '20', '30Kbp']
+    """
+    if ticks[-1]  - ticks[1] <= 1e3:
+        labels = ["{:,.0f}".format((x)) 
+                  for x in ticks] 
+        labels[-1] += " bp"
+    elif ticks[-1]  - ticks[1] <= 4e5:
+        labels = ["{:,.0f}".format((x / 1e3)) 
+                  for x in ticks]
+        labels[-1] += 'Kbp'
+    else:
+        labels = ["{:,.1f}".format((x / 1e6)) 
+                  for x in ticks]
+        labels[-1] += " Mbp"
+    
+    return labels
+
+def chrom_ticks_convert(ticks):
+    """
+    Convert a list of  chromosome size to suitable unit.
+    >>> ticks = [10000, 20000, 30000]
+    >>> chrom_ticks_convert(ticks)
+    ['10', '20', '30Kbp']
+    """
+    if ticks[-1]  - ticks[1] <= 1e3:
+        labels = ["{:,.0f}".format((x)) 
+                  for x in ticks] 
+        labels[-1] += " bp"
+    elif ticks[-1]  - ticks[1] <= 4e5:
+        labels = ["{:,.0f}".format((x / 1e3)) 
+                  for x in ticks]
+        labels[-1] += 'Kbp'
+    else:
+        labels = ["{:,.1f}".format((x / 1e6)) 
+                  for x in ticks]
+        labels[-1] += " Mbp"
+    
+    return labels

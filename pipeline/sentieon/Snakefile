@@ -24,6 +24,8 @@ platform = config['platform']
 samples = list(map(op.basename, [i.replace(ext, "").replace(reads[0], "") 
             for i in glob.glob('{}/*{}{}'.format(fastq_folder, reads[0], ext))]))
 
+localrun: all 
+
 rule all:
     input:
         expand("{workdirs}/output-jc.vcf.gz", workdirs=workdirs)
@@ -36,7 +38,7 @@ rule faidx:
     log:
         "run_faidx.log"
     shell:
-        "samtools faidx {intput}"
+        "samtools faidx {input} 2>{log}"
 
 rule bwtindex:
     input:
@@ -46,8 +48,11 @@ rule bwtindex:
     log:
         "run_bwt.log"
     shell:
-        "bwa index -a bwtsw {input}"
-    
+        "bwa index -a bwtsw {input} 2>{log}"
+
+
+
+
 rule mapping:
     input: 
         fasta = config['fasta'],
@@ -75,6 +80,18 @@ rule mapping:
        -r {input.fasta} -o {output} \
        -t {nt} --sam2bam -i - 
        """
+
+rule all_mapping:
+    input:
+        expand("{workdir}/{sample}/sort.bam", workdir=workdirs, sample=samples) 
+    output:
+        "{workdirs}/mapping.ok"
+    shell:
+        "touch {output}"
+
+rule mapping_all:
+    input:
+        "{workdirs}/mapping.ok"
 
 rule metrics:
     input:

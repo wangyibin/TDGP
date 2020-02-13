@@ -28,7 +28,7 @@ from TDGP.apps.base import debug, check_file_exists, listify
 from TDGP.apps.base import ActionDispatcher
 from TDGP.apps.utilities import isCooler
 from TDGP.formats.bedGraph import BedGraph
-from TDGP.graphics.ploty import change_width
+from TDGP.graph.ploty import change_width
 debug()
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -40,12 +40,16 @@ def main():
             ("test", "test"),
             ("plotLineRegress", "Plot two species pca1 lineregress"),
             ('plotMultiLineRegress', "plot two species pca1 lineregress per switch type"),
+            ('plotLRPerChrom', 'plot two samples pca1 linregress per chromosome'),
             ('plotEnrichment', 'plot compartment strength enrichment'),
             ('plotStrength', 'plot compartment strength in multi samples'),
             ('plotSwitchPie', 'plot two samples switch type pie picture'),
             ('getSyntenyGenePca', "get the synteny gene pairs pca value"),
             ('annotateSwitchType', "annotate swithch type for synteny gene pairs"),
-            ('statAB', 'stat A/B compartments informations')
+            ('annotateType', 'annotate the compartment type for a pca bg file'),
+            ('statAB', 'stat A/B compartments informations'),
+            ('buscoGeneDist', 'to analysis busco gene distribution between A and B'),
+
             
         )
     p = ActionDispatcher(actions)
@@ -88,6 +92,7 @@ class Compartment(object):
         memory = Memory(mem_cache, verbose=0)
         self.getStrengthError = memory.cache(self._getStrengthError)
     
+
     @staticmethod
     def calStrength(strength, permutted):
         def substrength(i):
@@ -170,7 +175,6 @@ class Compartment(object):
         
         strengthes = strength if iterCorrect else strengthes
         return strengthes, permutted   
-    
     
 class ABComparision(object):
     """
@@ -331,14 +335,14 @@ class ABComparisionSpecies(object):
         line_params = dict(color='#032F49', lw=2)
         slope, intercept, rvalue, pvalue, stderr = linregress(a, b)
         #r2 = rvalue ** 2 if rvalue > 0 else -1 * rvalue ** 2
-        label = [r"R$^2$ = {:.2f}  $\mathit{{P}}$ = {:.2e}".format(rvalue, pvalue)]
+        label = [r"r = {:.2f}  $\mathit{{P}}$ = {:.2e}".format(rvalue, pvalue)]
         fig, ax = plt.subplots(figsize=(5, 5))
         regplot(a, b, ax=ax, truncate=True, 
                 scatter_kws=scatter_params, line_kws=line_params)
         legend_elements = [Line2D([0], [0], **line_params)]
         #ax.set_title('The regression of PC1')
-        ax.set_xlabel("{}".format(xlabel))
-        ax.set_ylabel("{}".format(ylabel))
+        ax.set_xlabel("{}".format(xlabel), fontsize=12)
+        ax.set_ylabel("{}".format(ylabel), fontsize=12)
         plt.legend(legend_elements, label, loc='best')
                 #bbox_to_anchor=(1, 0.5))
         plt.savefig(out, dpi=300, bbox_inches='tight')
@@ -371,7 +375,7 @@ class ABComparisionSpecies(object):
             b = df.loc[df.type == stype]['value2']
 
             slope, intercept, rvalue, pvalue, stderr = scipy.stats.linregress(a, b)
-            text = '{} ($R^2$={:.2f})'.format(stype, rvalue)
+            text = '{} (r={:.2f})'.format(stype, rvalue)
             return text
         
         rvalues = list(map(calc, hue_order))
@@ -504,27 +508,6 @@ def chrom_size_convert(size):
     return label
 
 
-def chrom_ticks_convert(ticks):
-    """
-    Convert a list of  chromosome size to suitable unit.
-    >>> ticks = [10000, 20000, 30000]
-    >>> chrom_ticks_convert(ticks)
-    ['10', '20', '30Kbp']
-    """
-    if ticks[-1]  - ticks[1] <= 1e3:
-        labels = ["{:,.0f}".format((x)) 
-                  for x in ticks] 
-        labels[-1] += " bp"
-    elif ticks[-1]  - ticks[1] <= 4e5:
-        labels = ["{:,.0f}".format((x / 1e3)) 
-                  for x in ticks]
-        labels[-1] += 'Kbp'
-    else:
-        labels = ["{:,.1f}".format((x / 1e6)) 
-                  for x in ticks]
-        labels[-1] += " Mbp"
-    
-    return labels
 
 
 def plot_ab(ax, ab_data, xaxis_pos='bottom'):
@@ -671,6 +654,38 @@ def getSyntenyGenePca(args):
                             args.plot)
 
 
+def annotateType(args):
+    """
+    %(prog)s eigen1.bg [options]
+        To annotate AB type of a compartment pca results
+    """
+
+    p = p=argparse.ArgumentParser(prog=annotateType.__name__,
+                        description=annotateType.__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('bg', help='Compartment PCA analysis result, '
+        'bedgraph formats')
+    pOpt.add_argument('-e', '--exclude', action='store_true', 
+            default=False, help='exclude the pca value, [default: %(default)s]')
+    pOpt.add_argument('-o', '--out', type=argparse.FileType('w'),
+            default=sys.stdout, help='output file [default: stdout]')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    
+    args = p.parse_args(args)
+
+    with open(args.bg) as fp:
+        for line in fp:
+            line_list = line.strip().split()
+            _type = 'A' if float(line_list[3]) >= 0 else 'B'
+            if args.exclude:
+                line_list[3] = _type
+            else:
+                line_list.append(_type)
+            print('\t'.join(line_list), file=args.out)
+
 def annotateSwitchType(args):
     """
     %(prog)s species1-species2.synteny.eigen1.bg [Options]
@@ -731,6 +746,7 @@ def plotSwitchPie(args):
     %(prog)s infile1 infile2 [Options]
 
         Plot pie of compartments switch.
+
     """
     p = p=argparse.ArgumentParser(prog=plotSwitchPie.__name__,
                         description=plotSwitchPie.__doc__,
@@ -955,23 +971,99 @@ def plotStrength(args):
     change_width(ax, .5)
     plt.savefig(args.out, dpi=300, bbox_inches='tight')
 
+def plotLRPerChrom(args):
+    """
+    %(prog)s sample1.bg sample2.bg [Options]
 
-def statAB(args):
+        To plot two sample pca1 linregression.
+    """
+    
+    p = p=argparse.ArgumentParser(prog=plotLRPerChrom.__name__,
+                        description=plotLRPerChrom.__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('bg', nargs=2, help='The pca1 bg file')
+    pReq.add_argument('-o', '--out', 
+            help='output file name')
+
+    pOpt.add_argument('--plot', action='store_true', default=False, 
+            help='plot the all lineregression picture of per chromosome [default: %(default)s')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    args = p.parse_args(args)
+    infile1, infile2 = args.bg
+    list(map(check_file_exists, args.bg))
+    df1 = pd.read_csv(infile1, header=None, sep='\t', index_col=0, 
+            names=[ 'chrom', 'start', 'end', 'pca1'])
+    df2 = pd.read_csv(infile2, header=None, sep='\t', index_col=0, 
+            names=[ 'chrom', 'start', 'end', 'pca1'])
+    df1['type'] = df1['pca1'].map(lambda x: 'A' if x>=0 else 'B')
+    df2['type'] = df2['pca1'].map(lambda x: 'A' if x>=0 else 'B')
+    
+    chroms = sorted(set(df1.index), key=lambda x: x[3:])
+
+    def calc_linregress(value1, value2):
+        return  scipy.stats.linregress(value1, value2).rvalue
+    def calc_perchrom(chrom, df1, df2):
+        return calc_linregress(df1.loc[chrom].pca1, df2.loc[chrom].pca1)
+
+    rvalues = [calc_perchrom(chrom, df1, df2) for chrom in chroms]
+    r_df = pd.DataFrame({0: dict(zip(chroms, rvalues))})
+    r_df.to_csv(args.out.rsplit(".", 1)[0] + ".tsv", sep='\t', header=None)
+
+    rvalues = np.array(rvalues)
+    fig, ax = plt.subplots(figsize=(7, 4))
+    colors = ['#D33B00' if _y >=0 else '#00426D' for _y in rvalues]
+    sns.barplot(list(range(15)), rvalues, palette=colors, ax=ax)
+    ax.set_xticklabels(chroms, rotation=45, ha='right')
+    ax.set_ylabel('r',fontsize=18)
+    plt.tick_params(labelsize=12, width=1.5)
+
+    ax.spines['bottom'].set_linewidth(1.5)
+    ax.spines['left'].set_linewidth(1.5)
+    sns.despine(trim=True)
+    plt.savefig(args.out, dpi=300, bbox_inches='tight')  
+    logging.debug('Successful, picture is in `{}`'.format(args.out))
+    if args.plot:
+        prefix1 = infile1.split("_", 1)[0]
+        prefix2 = infile2.split("_", 1)[0]
+        outdir = prefix1 + "-" + prefix2 + "out"
+        try:
+            os.makedirs(outdir)
+        except OSError:
+            logging.warning('The such file of `{}` is already exists'.format(outdir))
+        
+        for chrom in chroms:
+            outfile = "{}/{}-{}_{}.pdf".format(outdir, 
+                            prefix1, prefix2, chrom)
+            xlabel = "{} {} (PC1)".format(prefix1, chrom)
+            ylabel = "{} {} (PC1)".format(prefix2, chrom)
+            v1 = df1.loc[chrom].pca1
+            v2 = df2.loc[chrom].pca1
+            abc = ABComparisionSpecies
+            abc.plotLineRegress(v1, v2, outfile, 
+                xlabel=xlabel, ylabel=xlabel)
+
+        logging.debug('Successful, result is in `{}`'.format(outdir))
+
+def statAB_old(args):
     """
     %(prog)s eigen1.bg
 
         Stat A/B compartments per chromosome and total.
 
     """
-    p = p=argparse.ArgumentParser(prog=statAB.__name__,
-                        description=statAB.__doc__,
+    p = p=argparse.ArgumentParser(prog=statAB_old.__name__,
+                        description=statAB_old.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
     pOpt = p.add_argument_group('Optional arguments')
-    pReq.add_argument('bg', 
-            help='input A/B compartments bedgraph file')
+    pReq.add_argument('bg', help='input A/B compartments bedgraph file')
     pOpt.add_argument('-o', '--out', type=argparse.FileType('w'), 
             default=sys.stdout, help='output file [default: stdin]')
+    pOpt.add_argument('--plot', action='store_true', default=False, 
+            help='plot the result [default: %(default)s]')
     pOpt.add_argument('-h', '--help', action='help',
             help='show help message and exit.')
     
@@ -999,10 +1091,172 @@ def statAB(args):
     
     logging.debug('Successful ... output file is in `{}`'.format(args.out.name))
 
+def statAB(args):
+    """
+    %(prog)s eigen1.bg [eigen1.bg] [Options]
+
+        Stat A/B compartments per chromosome and total.
+        Also can visualization the use through `--plot`.
+
+    """
+    p = p=argparse.ArgumentParser(prog=statAB.__name__,
+                        description=statAB.__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('bg', nargs="*", help='input A/B compartments bedgraph file')
+    pOpt.add_argument('-o', '--out', default='statAB.pdf', 
+            help='output file [default: %(default)s]')
+    pOpt.add_argument('--plot', action='store_true', default=False, 
+            help='plot the result [default: %(default)s]')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
     
+    args = p.parse_args(args)
+
+    def get_chromsize(df):
+        chroms = set(df.index.to_list())
+        size = 0
+        for chrom in chroms:
+            size += df.loc[chrom].end.max()
+        return size
+    
+    def statData(bg):
+        df = pd.read_csv(bg, header=None, sep='\t', index_col=0, 
+            names=[ 'chrom', 'start', 'end', 'pca1'])
+        df['type'] = df['pca1'].map(lambda x: 'A' if x>=0 else 'B')
+        chroms = sorted(set(df.index.to_list()), key=lambda x: x[3:])
+
+        header = ('chrom', 'genome_size', 'a', 'b', 'a_rate', 'b_rate')
+        db = {i:[] for i in header}
+        
+        for chrom in chroms:
+            tmp_df = df.loc[chrom]
+            a_df = tmp_df[tmp_df.type == 'A']
+            b_df = tmp_df[tmp_df.type == 'B']
+            alen = sum(a_df.end - a_df.start)
+            blen = sum(b_df.end - b_df.start)
+            for i, j in zip(header, [chrom, alen+blen, alen, blen, 
+                    alen*1.0/(alen+blen), blen*1.0/(alen+blen)]):
+                db[i].append(j)
+            res_df = pd.DataFrame(db)
+            
+        return res_df
+    
+    def plot(ax, idx, df):
+        data = np.array([df.a_rate, df.b_rate]).T
+        data_cum = data.cumsum(axis=1)
+        colors = ("#bb4853", "#209093")
+        labels = np.array(df.chrom)[::-1]
+        for i, (colname, color) in enumerate(zip(_types, colors)):
+            widths = data[:, i][::-1]
+            starts = data_cum[:, i][::-1] - widths
+            ax.barh(labels, widths, left=starts, height=0.5, 
+                        label=colname, color=color)
+        if idx == 0:
+            ax.tick_params(left='off', labelsize=12, width=0)
+        else:
+            ax.yaxis.set_visible(False)
+        
+        ax.xaxis.set_visible(False)
+        return ax
+    _types = ('A', 'B')
+    df_list = []
+    for bg in args.bg:
+        df = statData(bg)
+        df.to_csv(bg.rsplit('.', 1)[0] + '.tsv', sep='\t', header=None, index=None)
+        df_list.append(df)
+    
+    if args.plot:
+        fig, axes = plt.subplots(1, len(df_list), figsize=(3, 3*len(df_list)))
+
+        for i, (df, ax) in enumerate(zip(df_list, axes)):
+            plot(ax, i, df)
+        
+        axes[1].legend(ncol=len(_types), bbox_to_anchor=(-1.3, -0.1), 
+                loc='lower left')
+        sns.despine(bottom=True,left=True)
+        plt.savefig(args.out, dpi=300, bbox_inches='tight')
 
     
+def buscoGeneDist(args):
+    """
+    %(prog)s sample_eigen1.bg all_gene.bed busco_gene.bed [Options]
 
+        To analysis busco gene distribution between A and B.
+    """
+
+    p = p=argparse.ArgumentParser(prog=buscoGeneDist.__name__,
+                        description=buscoGeneDist.__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('bg', help='bedGraph file of compartment pca.')
+    pReq.add_argument('genebed', help='bed file of all genes')
+    pReq.add_argument('buscobed', help='bed file of busco genes.')
+    pOpt.add_argument('-f', '--fraction', default=0.5, type=float, 
+            help='Minimum overlap requred as a fraction of B [default: %(default)s]')
+    pOpt.add_argument('-o', '--out', 
+            help='output picture [default: sample_dist.pdf]')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    
+    args = p.parse_args(args)
+
+    prefix = args.bg.rsplit("_")[0]
+    out = prefix + "_busco_gene_dist.pdf" if not args.out else args.out
+    
+    ## annotate compartment
+    tsv = args.bg.replace('.bg', '.annotated.tsv')
+    annotateType([args.bg, '-o', tsv])
+    
+    ## intersect gene bed and busco gene bed to tsv
+    cmd_formatter = 'bedtools intersect -a {} -b {} -wo -F {} > {}'
+    cmd_gene = cmd_formatter.format(tsv, args.genebed, args.fraction, 
+            prefix + '_gene_compartment.tsv')
+    cmd_busco = cmd_formatter.format(tsv, args.buscobed, args.fraction,
+            prefix + '_busco_compartment.tsv')
+    os.system(cmd_gene)
+    os.system(cmd_busco)
+
+    def importData(infile):
+        df = pd.read_csv(infile, sep='\t', header=None, index_col=0, 
+                    names=('chrom', 'start', 'end', 'pca1', 'type', 
+                            'gene_chrom', 'gene_start', 'gene_end',
+                            'gene', 'length'))
+        return df
+    
+    def random_gene(df, nums):
+        return  df.sample(nums)
+
+    def iter_random(df, nums, _type='A', times=1000):
+        res = []
+        for i in range(times):
+            random_df = random_gene(df, nums)
+            res.append(len(random_df.loc[random_df['type'] == _type]))
+        return res
+    ## import data
+    gene_compartment = importData(prefix + '_gene_compartment.tsv')
+    busco_compartment = importData(prefix + '_busco_compartment.tsv')
+
+    ## remove busco gene from all genes
+    gene_compartment = gene_compartment[~gene_compartment['gene'].isin(busco_compartment['gene'])]
+    ## iter random select gene 
+    randomA = iter_random(gene_compartment, len(busco_compartment), _type= 'A')
+    randomB = iter_random(gene_compartment, len(busco_compartment),_type = 'B')
+    buscoA = len(busco_compartment[busco_compartment['type'] == 'A'])
+    buscoB = len(busco_compartment[busco_compartment['type'] == 'B'])
+    sns.set()
+    ax = sns.distplot(randomA, color='#a83836', label='Random genes in A')
+    sns.distplot(randomB, ax=ax, color='#275e8c', label='Random genes in B')
+    ax.axvline(buscoA, 1, 0,linestyle='-.', color='#a83836', label='BUSCO genes in A')
+    ax.axvline(buscoB, 1, 0, linestyle='-.', color='#275e8c', label='BUSCO genes in B')
+    ax.tick_params(labelsize=12)
+    ax.set_xlabel('Gene Numbers', fontsize=14)
+    ax.set_ylabel('Frequency', fontsize=14)
+    ax.legend()
+    plt.savefig(out, dpi=300, bbox_inches='tight')
+    logging.debug('Done, picture is in `{}`'.format(out))
 
 if __name__ == "__main__":
     main()

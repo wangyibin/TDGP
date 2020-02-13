@@ -315,10 +315,12 @@ class TADFile(BaseFile):
                      ax=ax,
                      label="{} ({})".format(label, len(data)))
         ax.set_xlim(xmin, xmax)
+        ax.tick_params(labelsize=12)
         ax.set_xticks(range(xmin, xmax + 1, step))
-        ax.set_xlabel('TAD Size ({})'.format(scale_units[scale]))
-        ax.set_ylabel('Frequency')
-        ax.set_title('TAD Size Distributions')
+        
+        ax.set_xlabel('TAD Size ({})'.format(scale_units[scale]), fontsize=14)
+        ax.set_ylabel('Frequency', fontsize=14)
+        ax.set_title('TAD Size Distributions', fontsize=16)
         plt.savefig(out, dpi=300)
 
     def plotSizeDistMulti(self, ax, data, label, scale=1000):
@@ -739,15 +741,17 @@ def plotSizeDist(args):
     logging.debug('Plotting ...')
     fig, ax = plt.subplots(1, 1, figsize=(5, 5))
     for tad in args:
-        label = tad.rsplit(".")[0]
+        label = tad.rsplit("_")[0]
         tf = TADFile(tad)
         data = tf.Sizes if opts.all else tf.bottomSizes
         ax = tf.plotSizeDistMulti(ax, data, label=label, scale=scale)
     ax.set_xlim(xmin, xmax)
+    ax.tick_params(labelsize=11)
     ax.set_xticks(range(xmin, xmax + 1, step))
-    ax.set_xlabel('TAD Size ({})'.format(scale_units[scale]))
-    ax.set_ylabel('Frequency')
-    ax.set_title('TAD Size Distributions')
+    ax.set_xticklabels(list(range(xmin, xmax+1, step)), rotation=45, ha='right')
+    ax.set_xlabel('TADs Size ({})'.format(scale_units[scale]), fontsize=13)
+    ax.set_ylabel('Frequency', fontsize=13)
+    ax.set_title('TADs Size Distributions', fontsize=14)
     plt.savefig(out, dpi=300, bbox_inches='tight')
     logging.debug('Success file is save as {}'.format(out))
 
