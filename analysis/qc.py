@@ -10,9 +10,13 @@ from __future__ import print_function
 import argparse
 import logging
 import numpy as np
+
+
+import cooler
 import matplotlib as mpl 
 mpl.use('Agg')
 import matplotlib.pyplot as plt
+import scipy
 import seaborn as sns
 import os
 import os.path as op
@@ -26,6 +30,7 @@ from TDGP.apps.base import ActionDispatcher
 from TDGP.apps.base import check_file_exists, debug
 from TDGP.apps.base import listify
 from TDGP.apps.base import BaseFile
+from TDGP.formats.hicmatrix import cool2matrix
 
 
 debug()
@@ -33,6 +38,7 @@ debug()
 def main():
 
     actions = (
+            ('plotCisTrans', 'plot the barplot of cis and trans interactions'),
             ("plotDistDensity", "Plot the IDE"),
             ("plotIDEMulti", 'plot multi sample IDE'),
             ('statFrag', 'stat the reality fragments')
@@ -288,6 +294,7 @@ class ValidPairs(BaseFile):
             else:
                 color_pallete = sns.color_palette('hls', len(distance_db))
         """
+        from scipy.stats import linregress
         plt.figure(figsize=(5, 5))
         if perchrom:
             for i, chrom in enumerate(distance_db): 
@@ -296,7 +303,9 @@ class ValidPairs(BaseFile):
                 data = data[(data >= xmin) & (data <= xmax)]
                 unique, counts = np.unique(data, return_counts=True)
                 db = OrderedDict(zip(unique, counts))
-                plt.plot(list(db.keys()), list(db.values()), label=chrom,)# color=c)
+                slope = linregress(np.log10(unique), np.log10(counts)).slope
+                label = "{} ({:.2f})".format(chrom, slope)
+                plt.plot(list(db.keys()), list(db.values()), label=label,)# color=c)
                 plt.legend(loc='center left', bbox_to_anchor=(1, 0.5))
         else:
             data = list(chain(*list(distance_db.values())))
@@ -304,8 +313,11 @@ class ValidPairs(BaseFile):
             data = data[(data >= xmin) & (data <= xmax)]
             unique, counts = np.unique(data, return_counts=True)
             db = OrderedDict(zip(unique, counts))
+            slope = linregress(np.log10(unique), np.log10(counts)).slope
+            label = 'all'
+            label = "{} ({:.2f})".format(label, slope)
             plt.plot(list(db.keys()), list(db.values()), 
-                label='all chromosome')#, color=single_color)
+                label=label)#, color=single_color)
             plt.legend(loc='best', fontsize=14)
         #plt.xlim(xmin, xmax)
         plt.ylabel('Contact probability', fontsize=14)
@@ -313,6 +325,8 @@ class ValidPairs(BaseFile):
         plt.yscale('log')
         plt.xscale('log')
         plt.savefig(out, dpi=300, bbox_inches='tight')
+        plt.savefig(out.rsplit(".", 1)[0] + '.png', 
+                    dpi=300, bbox_inches='tight')
         logging.debug('Successful, picture is in `{}`'.format(out))
 
 
@@ -390,6 +404,9 @@ def plotIDEMulti(args):
             help='show help message and exit.')
     
     args = p.parse_args(args)
+
+    from scipy.stats import linregress
+    from matplotlib.lines import Line2D
     scale = args.scale
     xmin = args.xmin
     xmax = args.xmax
@@ -408,25 +425,82 @@ def plotIDEMulti(args):
         check_file_exists(i)
     assert len(args.validpairs) == len(args.labels), \
         'input validpair file must equal to labels'
+    i = 0
     for validpair, label in zip(args.validpairs, args.labels):
         vp = ValidPairs(validpair)
         distance_db = vp.getCisDistance(chrom=chrom)
         data = list(chain(*list(distance_db.values())))
         data = np.array(data) // scale * scale
+        
         data = data[(data >= xmin) & (data <= xmax)]
+       
         unique, counts = np.unique(data, return_counts=True)
         db = OrderedDict(zip(unique, counts))
-        
+        slope = linregress(np.log10(unique), np.log10(counts)).slope
+        label = "{} ({:.2f})".format(label, slope)
+        #sns.regplot(list(db.keys()), list(db.values()), label=label, 
+         #   marker=Line2D.filled_markers[i], ci=0, truncate=True,
+        #    )
+        #i += 1
         plt.plot(list(db.keys()), list(db.values()), label=label)
-    plt.legend(loc='best', fontsize=14)
+    plt.legend(loc='best', fontsize=13)
     #plt.xlim(xmin, xmax)
     plt.ylabel('Contact probability', dict(size=14))
     plt.xlabel('Distance (bp)', dict(size=14))
     plt.yscale('log')
     plt.xscale('log')
+    #sns.despine(trim=True)
     plt.savefig(out, dpi=300, bbox_inches='tight')
+    plt.savefig(out.rsplit(".", 1)[0] + '.png', 
+                    dpi=300, bbox_inches='tight')
     logging.debug('Successful, picture is in `{}`'.format(out))
 
+
+def plotCisTrans(args):
+    """
+    %(prog)s <coolfile> [coolfile ...] [Options]
+
+        calculate the cis and trans interaction, and plot the barplot.
+    
+    """
+    p = p=argparse.ArgumentParser(prog=plotCisTrans.__name__,
+                        description=plotCisTrans.__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('cool', nargs='+', 
+            help='cool file of hicmatrix')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    
+    args = p.parse_args(args)
+    cis_list = []
+    trans_list = []
+    for coolfile in args.cool:
+        cool = cooler.Cooler(coolfile)
+        hm = cool2matrix(cool)
+        # calculate cis counts
+        counts = np.zeros(cool.info['nbins'])
+        for chrom in cool.chromnames:
+            idx = cool.bins().fetch(chrom).index
+            counts[idx] = np.triu(hm[idx][:, idx]).sum(axis=1)
+        cis_list.append(int(counts.sum()))
+
+        ## calculate trans counts
+        counts = np.zeros(cool.info['nbins'])
+        for chrom in cool.chromnames:
+            idx = cool.bins().fetch(chrom).index
+            start = idx[0]
+            end = idx[-1]
+            hm[start: end + 1, start: end + 1] = 0
+            counts[idx] = hm[idx].sum(axis=1)
+        counts = counts / 2
+        trans_list.append(int(counts.sum()))
+        #print(counts.sum())
+
+    
+    print('\t'.join(map(str, cis_list)))
+    print('\t'.join(map(str, trans_list)))
 
 def statFrag(args):
     """

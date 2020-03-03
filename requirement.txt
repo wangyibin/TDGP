@@ -1,0 +1,6 @@
+cooler
+numpy
+matplotlib
+pandas
+pyranges
+seaborn

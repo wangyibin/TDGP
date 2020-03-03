@@ -36,10 +36,15 @@ def create_trans_db(allpairs):
     json.dump(db, open('{}_trans.json'.format(prefix), 'w'))
 
 
-def cacl_total_trans(chrom_trans_nums):
+def cacl_total_trans(chrom_trans_nums, chrom_list):
     total_trans = 0
-    for chrom in chrom_trans_nums:
-        total_trans += sum(list(map(int, chrom_trans_nums[chrom].values())))
+    for chrom in chrom_list:
+        if chrom.startswith('tig'):
+            continue
+        total_trans += sum(list(map(int, [chrom_trans_nums[chrom][chrom2] 
+                    for chrom2 in chrom_trans_nums[chrom] 
+                    if chrom2 in chrom_list])))
+
     return  total_trans
 
 
@@ -65,7 +70,7 @@ def get_whole_obs_exp_matrix(allpairs, chrom_list):
     chrom_trans_nums = json.load(open('{}_trans.json'.format(prefix)))
     
     whole_obs_exp_matrix = np.zeros((len(chrom_list), len(chrom_list)))
-    total_trans = cacl_total_trans(chrom_trans_nums)
+    total_trans = cacl_total_trans(chrom_trans_nums, chrom_list)
 
     for i, chrom1 in enumerate(chrom_list):
         chrom1_trans = sum(list(map(int, chrom_trans_nums[chrom1].values())))
@@ -94,7 +99,7 @@ def merge_matrix(matrix1, matrix2):
 
 def plot_heatmap(whole_obs_exp_matrix, chrom_list, prefix,
         color='coolwarm', valfmt='{x: .3f}', figsize=(10, 10), 
-        vmin=0.2, vmax=-0.2):
+        vmin=0.2, vmax=-0.2, xlabel='', ylabel=''):
     import matplotlib as mpl
     mpl.use('Agg')
     import matplotlib.pyplot as plt
@@ -105,13 +110,16 @@ def plot_heatmap(whole_obs_exp_matrix, chrom_list, prefix,
 
     fig, ax = plt.subplots(figsize=figsize)
     im = ax.imshow(whole_obs_exp_matrix, cmap=color, vmax=vmax, vmin=vmin)
-    ax.figure.colorbar(im, ax=ax,fraction=0.045 )
+    ax.figure.colorbar(im, ax=ax, fraction=0.045 )
 
     ax.set_xticks(np.arange(len(chrom_list)))
     ax.set_xticklabels(chrom_list, fontsize=14, rotation=45, ha='left')
     ax.set_yticks(np.arange(len(chrom_list)))
     ax.set_yticklabels(chrom_list, fontsize=14)
-
+    ax.set_ylabel(ylabel, fontsize=18)
+    ax.set_xlabel(xlabel, fontsize=18)
+    ax.xaxis.set_label_position('top')
+    
     valfmt = mpl.ticker.StrMethodFormatter(valfmt)
 
     for i in range(len(chrom_list)):
@@ -122,7 +130,7 @@ def plot_heatmap(whole_obs_exp_matrix, chrom_list, prefix,
                       ha='center', va='center')
 
     plt.savefig('{}_whole_chromosome_positions.pdf'.format(prefix), dpi=300)
-
+    plt.savefig('{}_whole_chromosome_positions.png'.format(prefix), dpi=300)
 
 
 
@@ -134,10 +142,14 @@ if __name__ == "__main__":
     pOpt = p.add_argument_group('Optional arguments')
     pReq.add_argument('infile', nargs="+", help='allValidpairs file')
     pReq.add_argument('-c', '--chrom', help='the chromsome size file')
-    pOpt.add_argument('--vmin', type=float, default=-0.2, 
+    pOpt.add_argument('--vmin', type=float, default=-0.16, 
             help="min value of heatmap [default: %(default)s]")
-    pOpt.add_argument('--vmax', type=float, default=0.2,
+    pOpt.add_argument('--vmax', type=float, default=0.16,
             help='max value of heatmap [default: %(default)s]')
+    pOpt.add_argument('--xlabel',default='', 
+            help='label of x axis [default: %(default)s]')
+    pOpt.add_argument('--ylabel', default='',
+            help='label of y axis [default: %(default)s]')
     pOpt.add_argument('--figsize', type=str, default='(10, 10)', 
             help='figsize of picture [default: %(default)s]')
     pOpt.add_argument('-h', '--help', action='help',
@@ -159,4 +171,5 @@ if __name__ == "__main__":
         print('[Error]: infiles number should be 1 or 2')
         sys.exit()
     plot_heatmap(matrix, chrom_list, prefix, vmax=args.vmax, 
-            vmin=args.vmin, figsize=eval(args.figsize))
+            vmin=args.vmin, figsize=eval(args.figsize), 
+            xlabel=args.xlabel, ylabel=args.ylabel)

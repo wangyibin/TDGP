@@ -13,6 +13,9 @@ import os.path as op
 import sys
 
 
+from collections import defaultdict
+
+
 def chrRangeID(args, axis=0):
     """
     Chrom range transformation.
@@ -127,3 +130,35 @@ def chrom_ticks_convert(ticks):
         labels[-1] += " Mbp"
     
     return labels
+
+
+def makeChromWindows(chrom_size, window=5e6):
+    """
+    To segment chromosome interval into certain windows.
+    """
+
+    chrom_size_db = dict(i.strip().split() 
+                for i in open(chrom_size) if i.strip())
+    
+    interval_db = defaultdict(list)
+    window = int(window)
+    for chrom in chrom_size_db:
+        size = int(chrom_size_db[chrom])
+        for i in range(0, size, window):
+            interval_db[chrom].append([i, i+window])
+    
+        interval_db[chrom][-1][1] = size
+
+    return interval_db
+
+
+
+def wi_test(data1, data2):
+    """
+    Wilcoxon rank-sum tests
+    return: pvalue
+    """
+    from scipy import stats
+    wi = stats.ranksums(data1, data2)
+    return wi.pvalue
+

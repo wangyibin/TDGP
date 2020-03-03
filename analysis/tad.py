@@ -5,6 +5,7 @@ TADs analysis libraries.
 """
 from __future__ import print_function
 
+import argparse 
 import cooler
 import logging
 import numpy as np
@@ -40,7 +41,10 @@ def main():
                 'find gene location in TADs'), ('getSyntenicTADs',
                                                 'get syntenic tads'),
                ('plotBoundary',
-                'plot omics data density in boundary'), ('test', 'test'))
+                'plot omics data density in boundary'), ('test', 'test'),
+                ('quickPlotTAD',
+                'quick plot picture to tads result visualization'),)
+
     p = ActionDispatcher(actions)
     p.dispatch(globals())
 
@@ -751,7 +755,7 @@ def plotSizeDist(args):
     ax.set_xticklabels(list(range(xmin, xmax+1, step)), rotation=45, ha='right')
     ax.set_xlabel('TADs Size ({})'.format(scale_units[scale]), fontsize=13)
     ax.set_ylabel('Frequency', fontsize=13)
-    ax.set_title('TADs Size Distributions', fontsize=14)
+    ax.set_title('TADs Size Distribution', fontsize=14)
     plt.savefig(out, dpi=300, bbox_inches='tight')
     logging.debug('Success file is save as {}'.format(out))
 
@@ -954,7 +958,7 @@ def plotBoundary(args):
                  help='calculate binSize [default: %default]')
     p.add_option('-p',
                  '--process',
-                 default=4,
+                 default=8,
                  type=int,
                  help='process of program [default:%default]')
     p.add_option('-o',
@@ -1003,6 +1007,71 @@ def plotBoundary(args):
     logging.debug('Done, picture is `{prefix}_{label}.pdf`'.format(
         prefix=prefix, label=label))
 
+
+
+
+def quickPlotTAD(args):
+    """
+    %(prog)s <sample_4000.iced.cool> <sample.domain> [Options]
+
+        Quick plot picture to view all TADs results.
+    """
+
+    p=argparse.ArgumentParser(prog=quickPlotTAD.__name__,
+                        description=quickPlotTAD.__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('cool', help='cool file of hic matrix')
+    pReq.add_argument('domain', help='domain file of TAD, '
+                        'three columns(chrom start end).')
+    pReq.add_argument('chrom_size', help='chromosome sizes file')
+    pOpt.add_argument('--min_value', defaule=3, type=str, 
+            help='min value of hic matrix [default: %(default)s]')
+    pOpt.add_argument('-w', '--window', type=float, default=5e6,
+            help='window of chromosome sizes [default: %(default)s]')
+    pOpt.add_argument('-o', '--outdir', default='quickPlotTAD_result',
+            help='outdir of result [default: %(default)s]')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    
+    args = p.parse_args(args)
+
+    import configparser
+    from TDGP.apps.utilities import makeChromWindows
+    cf = configparser.ConfigParser()
+
+    cf.add_section('hic matrix')
+    cf.set('hic matrix', 'file', args.cool)
+    cf.set('hic matrix', 'title', 'Hi-C')
+    cf.set('hic matrix', 'depth', '1200000')
+    cf.set('hic matrix', 'min_value', args.min_value)
+    cf.set('hic matrix', 'transform', 'log1p')
+    cf.set('hic matrix', 'file_type', 'hic_matrix')
+
+    cf.add_section('tad')
+    cf.set('tad', 'file', args.domain)
+    cf.set('tad', 'display', 'triangles')
+    cf.set('tad', 'border color', 'black')
+    cf.set('tad', 'color', 'none')
+    cf.set('tad', 'overlay previous', 'share-y')
+
+    cf.add_section('x-axis')
+    cf.set('x-axis', 'where', 'bottom')
+
+    with open('quickPlotTAD.tad.ini', 'w+') as f:
+        cf.write(f)
+    
+    chrom_windows_db = makeChromWindows(args.chrom_size, args.window)
+    plot_cmd_formatter = "pyGenomeTracks --tracks quickPlotTAD.tad.ini -o {1}/{0} --region {0}"
+    
+    if not op.exists(args.outdir):
+        os.makedirs(args.outdir)
+    for chrom in chrom_windows_db:
+        for (start, end) in chrom_windows_db[chrom]:
+            region = '{}:{}-{}'.format(chrom, start, end)
+            print(plot_cmd_formatter.format(region, args.outdir))
+    
 
 if __name__ == "__main__":
     main()

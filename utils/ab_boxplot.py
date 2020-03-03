@@ -7,6 +7,12 @@
     
     To plot boxplot of gene density of per A/B compartment.
     bg file: chrom start end eigen1 geneDensity
+
+
+    ** if using xlabel or ylabel options, 
+        you can also use latex to set special format (italic, up ...)
+        italic: `"$\mathic{{trans}}$"`
+        scientific count: `"$10 \times 6$"`
 """
 
 from __future__ import print_function
@@ -38,7 +44,8 @@ def as_si(x, ndp):
 
 
 
-def ab_boxplot(a_data, b_data, chrom, ax, scale=100):
+def ab_boxplot(a_data, b_data, chrom, ax, 
+            scale=100, xlabel='', ylabel=''):
     
     # wi_test
     pvalue = wi_test(a_data[4], b_data[4])
@@ -75,7 +82,8 @@ def ab_boxplot(a_data, b_data, chrom, ax, scale=100):
         y2 = max_upper + max_upper/10
     ax.set_xticks([1, 2])
     ax.set_xticklabels(['A', 'B'], fontsize=12)
-    ax.set_xlabel(chrom, fontsize=14)
+    ax.set_xlabel(r"{}".format(xlabel), fontsize=13)
+    ax.set_ylabel(r"{}".format(ylabel), fontsize=13)
     ax.set_ylim((min_bottom - max_upper/5, max_upper + max_upper/2))
     ax.plot([1,1,2,2], [y1, max_upper + h, max_upper + h, y2], linewidth=1.0, color='black')
     ax.text((1 + 2)*.5, max_upper + max_upper/4.5, r'$P = {0:s}$'.format(as_si(pvalue, 2)), ha='center', va='bottom' )
@@ -101,7 +109,8 @@ def read_bg(bgfile):
 
 
 def plot(bgfile, scale=100, title="Gene Density", outfile='ab_boxplot.pdf', chrom_list='all', column_num=4, 
-        draw_per_chrom=False, exclude=[],sort_func='lambda x: int(x[3:])'):
+        draw_per_chrom=False, exclude=[], xlabel='', ylabel='',
+        sort_func='lambda x: int(x[3:])'):
     
     import matplotlib as mpl
     mpl.use('Agg')
@@ -129,11 +138,11 @@ def plot(bgfile, scale=100, title="Gene Density", outfile='ab_boxplot.pdf', chro
     
     if not draw_per_chrom:
         fig, ax = plt.subplots(figsize=(4,4))
-        chrom = "Genome-Wide"
+        chrom = xlabel
         suptitle_props = dict(fontsize=16, x=0.5, y=0.95)
         a_data = ab_data[ab_data[3] > 0]
         b_data = ab_data[ab_data[3] < 0]
-        ab_boxplot(a_data, b_data, chrom, ax, scale)
+        ab_boxplot(a_data, b_data, chrom, ax, scale, xlabel, ylabel)
     else:
         suptitle_props = dict(fontsize=24, x=0.5, y=1.04)
         chrom_list.sort(key=eval(sort_func))
@@ -144,13 +153,16 @@ def plot(bgfile, scale=100, title="Gene Density", outfile='ab_boxplot.pdf', chro
         axs = trim_axs(axs, len(chrom_list))
 
         for ax, chrom in zip(axs, chrom_list):
+            xlabel = r"{} ({})".format(xlabel, chrom)
             a_data = ab_data[(ab_data[0] == chrom) & (ab_data[3] > 0)]
             b_data = ab_data[(ab_data[0] == chrom) & (ab_data[3] < 0)]
-            ab_boxplot(a_data,b_data, chrom, ax, scale)
+            ab_boxplot(a_data,b_data, chrom, ax, scale, xlabel, ylabel)
 
     plt.suptitle(title, **suptitle_props)
     plt.savefig(outfile, dpi=300,bbox_inches='tight' )
-        
+    plt.savefig(outfile.rsplit('.', 1)[0] + '.png', 
+                dpi=300,
+                bbox_inches='tight')  
 
 
 
@@ -168,7 +180,7 @@ if __name__ == "__main__":
             ' or a list file.[default: %default]')
     p.add_option('-n', '--column_num', default=4, type=int,
             help='the number of subplot column [default: %default]')
-    p.add_option('-c', '--draw_per_chrom', default=False,
+    p.add_option('-c', '--perchrom', default=False,
             action='store_true', help='draw boxplot per chromosome'
             '[default: %default]')
     p.add_option('--exclude', default=[],
@@ -176,6 +188,10 @@ if __name__ == "__main__":
             '[default: %default]')
     p.add_option('--scale', default=100, type=int, 
             help='the scale of yticks [default: %default]')
+    p.add_option('--xlabel', default='', 
+            help='xlabel of genome wide picture [default: none]')
+    p.add_option('--ylabel', default='',
+            help='ylabel of genome wide picture [default:none]')
     p.add_option('--sort_func', default='lambda x: int(x[3:])',
             help='chromosome name sort function [default: %default]')
 
@@ -190,9 +206,14 @@ if __name__ == "__main__":
     outfile = opts.outfile
     chrom_list = opts.chrom_list
     column_num = opts.column_num
-    draw_per_chrom = opts.draw_per_chrom
+    draw_per_chrom = opts.perchrom
     exclude = opts.exclude
     scale = opts.scale
+    xlabel = opts.xlabel
+    ylabel = opts.ylabel
     sort_func = opts.sort_func
     
-    plot(bgfile,scale, title, outfile, chrom_list,column_num, draw_per_chrom, exclude, sort_func)
+    plot(bgfile, scale, title, 
+        outfile, chrom_list,column_num, 
+        draw_per_chrom, exclude, 
+        xlabel, ylabel, sort_func)

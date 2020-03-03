@@ -328,6 +328,8 @@ def getTSS(args):
             for line in fp:
                 if line.startswith("#"):
                     continue
+                if not line.strip():
+                    continue
                 line_list = line.strip().split('\t')
                 (chrom, _, type_, start, end, _, strand, 
                     _, info) = line_list[:9]
@@ -347,7 +349,7 @@ def getTSS(args):
                             int(start) + 1))), file=out)
     
     out = 'stdout' if isinstance(out, str) else out
-    logging.debug('Done, output is in `{}`'.format(out))
+    logging.debug('Done, output is in `{}`'.format)
 
 
 def getTSSbw(args):
@@ -360,8 +362,8 @@ def getTSSbw(args):
     p = OptionParser(getTSSbw.__doc__)
     p.add_option('-w', '--window', type=int, default=1000,
             help='the window of tss density calculation')
-    p.add_option('-o', '--out', default=sys.stdout,
-            help='output [default: stdout]')
+    p.add_option('-o', '--out', default='./',
+            help='output [default: %default]')
     p.add_option('--qsub', default=False, action='store_true',
             help='if qsub to sge [default: %default]')
     opts, args = p.parse_args(args)
@@ -373,22 +375,23 @@ def getTSSbw(args):
     check_file_exists(chrom_sizes)
     command = 'qsub -pe mpi 1 -cwd -j y -S /bin/bash' if opts.qsub \
             else 'sh'
-        
+    
+    outdir = op.abspath(opts.out)
     cmd = 'python -m TDGP.analysis.genome getTSS {} > \
-        {}.gene.tss.bed\n'.format(gff, sample)
-    cmd += 'bedtools makewindows -g {} -w {} > {}.{}.window\n'.format(
-                chrom_sizes, window, sample, window)
-    cmd += 'bedtools intersect -a {sample}.{window}.window -b \
-            {sample}.gene.tss.bed -c | sort -k1,1 -k2,2n > \
-                {sample}.gene.tss.{window}.bg\n'.format(sample=sample, 
-                window=window)
-    cmd += 'bedGraphToBigWig {sample}.gene.tss.{window}.bg {sizes} \
-            {sample}.gene.tss.{window}.bw\n'.format(sample=sample, 
-                window=window, sizes=chrom_sizes)
-    with open('run_{}_tss.sh'.format(sample), 'w') as out:
+        {}/{}.gene.tss.bed\n'.format(gff, outdir, sample)
+    cmd += 'bedtools makewindows -g {1} -w {2} > {0}/{3}.{2}.window\n'.format(
+                outdir, chrom_sizes, window, sample,)
+    cmd += 'bedtools intersect -a {outdir}/{sample}.{window}.window -b \
+            {outdir}/{sample}.gene.tss.bed -c | sort -k1,1 -k2,2n > \
+                {outdir}/{sample}.gene.tss.{window}.bg\n'.format(sample=sample, 
+                window=window, outdir=outdir)
+    cmd += 'bedGraphToBigWig {outdir}/{sample}.gene.tss.{window}.bg {sizes} \
+            {outdir}/{sample}.gene.tss.{window}.bw\n'.format(sample=sample, 
+                window=window, sizes=chrom_sizes, outdir=outdir)
+    with open('{}/run_{}_tss.sh'.format(outdir, sample), 'w') as out:
         out.write(cmd)
     
-    os.system('{} run_{}_tss.sh'.format(command, sample))
+    os.system('{} {}/run_{}_tss.sh'.format(command, outdir, sample))
     logging.debug('Successful')
 
 

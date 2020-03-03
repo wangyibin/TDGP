@@ -14,6 +14,8 @@ import os
 import os.path as op
 import numpy as np
 import pandas as pd
+
+import cooler
 import scipy
 import seaborn as sns
 import matplotlib as mpl
@@ -28,6 +30,7 @@ from TDGP.apps.base import debug, check_file_exists, listify
 from TDGP.apps.base import ActionDispatcher
 from TDGP.apps.utilities import isCooler
 from TDGP.formats.bedGraph import BedGraph
+from TDGP.formats.hicmatrix import cool2matrix
 from TDGP.graph.ploty import change_width
 debug()
 log = logging.getLogger(__name__)
@@ -44,12 +47,14 @@ def main():
             ('plotEnrichment', 'plot compartment strength enrichment'),
             ('plotStrength', 'plot compartment strength in multi samples'),
             ('plotSwitchPie', 'plot two samples switch type pie picture'),
+            ('plotBoxPerChrom', 'plot boxplot of some data per chromosomes'),
+            ('plotBoxMultiSamples', 'plot boxplot of some data per samples on one chromosome'),
             ('getSyntenyGenePca', "get the synteny gene pairs pca value"),
             ('annotateSwitchType', "annotate swithch type for synteny gene pairs"),
             ('annotateType', 'annotate the compartment type for a pca bg file'),
             ('statAB', 'stat A/B compartments informations'),
             ('buscoGeneDist', 'to analysis busco gene distribution between A and B'),
-
+            ('getSwitchLink', 'to get links between sample1 and sample2 to plot circos')
             
         )
     p = ActionDispatcher(actions)
@@ -99,8 +104,8 @@ class Compartment(object):
             # comment return below to make kind of weird but realistic 50/50 compartment split 
             # rather than default 20% compartments
             # ------------!!!!!!!!!!!!!!!!!!!!!!-------------------
-            return np.log(i[0,0] * i[-1,-1] / i[0,-1]**2)
-            t1 = i[:3,:3].sum() + i[:2, :2].sum()
+            return np.log(i[0,0] * i[-1, -1] / i[0, -1]**2)
+            t1 = i[:3, :3].sum() + i[:2, :2].sum()
             t2 = i[2:, 2:].sum() + i[3:, 3:].sum()
             t3 = i[:3, 2:].sum() + i[:2, 3:].sum()
             return np.log(t1 * t2 / t3**2)
@@ -193,6 +198,9 @@ class ABComparision(object):
             stype=('AA', 'BB', 'BA', 'AB')):
         """
         To annotate switch type for compartments pairs 
+
+            ** infile format:
+                chrom1 start1 end1 value1 chrom2 start2 end2 value2
         """
         check_file_exists(infile)
         with open(infile, 'r') as fp:
@@ -288,6 +296,8 @@ class ABComparisionSpecies(object):
             stype=('AA', 'BB', 'BA', 'AB')):
         """
         To annotate switch type for synteny gene pairs 
+             ** infile format:
+                chrom1 start1 end1 value1 chrom2 start2 end2 value2
         """
         check_file_exists(infile)
         with open(infile, 'r') as fp:
@@ -407,7 +417,11 @@ def import_ab_data(path):
     Import data from bed4 as `pandas.DataFrame`, 
     and name columns with `chrom    start    end    pca1`.
     """
-    df = pd.read_csv(path, sep='\t', header=None, names=[ 'chrom', 'start', 'end', 'pca1'], index_col=0)
+    df = pd.read_csv(path, 
+                    sep='\t',
+                    header=None, 
+                    names=[ 'chrom', 'start', 'end', 'pca1'], 
+                    index_col=0)
     return df
 
 
@@ -464,6 +478,22 @@ def switch_type(v1, v2):
         else:
             return "BB"
 
+def switch_type_in_df(df):
+    """
+    judge the switch type of ab compartments in two dataframe of pca1 bedGraph
+    >>> df1-df2.head(1)
+    chrom1 start1 end1 value1 chrom2 start2 end2 value2
+
+    >>> df1-df2.apply(switch_type_in_df, axis=1)
+    """
+    if df.value1 >= 0 and df.value2 >= 0:
+        return 'AA'
+    elif df.value1 >= 0 and df.value2 < 0:
+        return 'AB'
+    elif df.value1 < 0 and df.value2 < 0:
+        return 'BB'
+    elif df.value1 < 0 and df.value2 >= 0:
+        return 'BA'
 
 def two_species_conserved_compare(tgy_df, jgy_df):
     """
@@ -589,6 +619,7 @@ def plot_two_species_ab_pie(tgy_df, jgy_df, out):
         autotext.set_color('white')
         autotext.set_fontsize(20)
     plt.savefig(out, dpi=300)
+    plt.savefig(out.rsplit('.', 1)[0] + '.png', dpi=300)
 
 ## outside command ##
 def plotLineRegress(args):
@@ -656,8 +687,10 @@ def getSyntenyGenePca(args):
 
 def annotateType(args):
     """
-    %(prog)s eigen1.bg [options]
+    %(prog)s <eigen1.bg> [options]
         To annotate AB type of a compartment pca results
+        ** infile format:
+            chrom start end value
     """
 
     p = p=argparse.ArgumentParser(prog=annotateType.__name__,
@@ -688,9 +721,11 @@ def annotateType(args):
 
 def annotateSwitchType(args):
     """
-    %(prog)s species1-species2.synteny.eigen1.bg [Options]
+    %(prog)s <species1-species2.synteny.eigen1.tsv> [Options]
         
         To annotate the A/B switch type to a synteny gene pairs eigen file.
+        ** infile format:
+            chrom1 start1 end1 value1 chrom2 start2 end2 value2
     """
     p = p=argparse.ArgumentParser(prog=annotateSwitchType.__name__,
                         description=annotateSwitchType.__doc__,
@@ -718,9 +753,9 @@ def annotateSwitchType(args):
 
 def plotMultiLineRegress(args):
     """
-    %(prog)s in.annotated.tsv [Options]
+    %(prog)s <in.annotated.tsv> [Options]
         To plot four switch type line regression plot in a picture
-    
+
     """
     p = p=argparse.ArgumentParser(prog=plotMultiLineRegress.__name__,
                         description=plotMultiLineRegress.__doc__,
@@ -743,10 +778,12 @@ def plotMultiLineRegress(args):
 
 def plotSwitchPie(args):
     """
-    %(prog)s infile1 infile2 [Options]
+    %(prog)s <infile1> <infile2> [Options]
 
         Plot pie of compartments switch.
-
+        
+        **infile:
+            chrom start end value
     """
     p = p=argparse.ArgumentParser(prog=plotSwitchPie.__name__,
                         description=plotSwitchPie.__doc__,
@@ -765,6 +802,7 @@ def plotSwitchPie(args):
     df1 = import_ab_data(infile1)
     df2 = import_ab_data(infile2)
     plot_two_species_ab_pie(df1, df2, args.out)
+
 
 def plotEnrichment(args):
     """
@@ -966,16 +1004,19 @@ def plotStrength(args):
     if 'GC' in args.eig :
         ymax = max(values) + 0.1
         plt.ylim(0, ymax)
-    ax.set_ylabel('Compartments Strength')
-    ax.set_xticklabels(names)
+    ax.set_ylabel('Compartments Strength', fontsize=14)
+    ax.set_xticklabels(names, fontsize=14)
+    ax.tick_params(labelsize=14)
+    sns.despine(trim=True)
     change_width(ax, .5)
     plt.savefig(args.out, dpi=300, bbox_inches='tight')
+
 
 def plotLRPerChrom(args):
     """
     %(prog)s sample1.bg sample2.bg [Options]
 
-        To plot two sample pca1 linregression.
+        To plot barplot of two sample pca1 linregression per chromosome.
     """
     
     p = p=argparse.ArgumentParser(prog=plotLRPerChrom.__name__,
@@ -1024,7 +1065,10 @@ def plotLRPerChrom(args):
     ax.spines['left'].set_linewidth(1.5)
     sns.despine(trim=True)
     plt.savefig(args.out, dpi=300, bbox_inches='tight')  
+    plt.savefig(args.out.rsplit('.', 1)[0] + '.png', dpi=300, 
+            bbox_inches='tight')
     logging.debug('Successful, picture is in `{}`'.format(args.out))
+
     if args.plot:
         prefix1 = infile1.split("_", 1)[0]
         prefix2 = infile2.split("_", 1)[0]
@@ -1046,6 +1090,71 @@ def plotLRPerChrom(args):
                 xlabel=xlabel, ylabel=xlabel)
 
         logging.debug('Successful, result is in `{}`'.format(outdir))
+
+
+def get_chromsize(df):
+    """
+    Get total chromosize from a bedgraph file with pandas dataframe format
+    
+    Params:
+    --------
+    df: pandas.DataFrame 
+
+    Return:
+    --------
+    out: `int` genome sizes
+
+    Examples:
+    ---------
+    >>> get_chromsize(df)
+     304930202
+    """
+    chroms = set(df.index.to_list())
+    size = 0
+    for chrom in chroms:
+        size += df.loc[chrom].end.max()
+    return size
+
+def statData(bg):
+    """
+    Stat A/B compartments bedgraph file.
+
+    Params:
+    --------
+    bg: `str` bedgraph file of compartments pca1
+    
+    Returns:
+    --------
+    out: `pandas.DataFrame` of compartments informations
+
+    Examples:
+    --------
+    >>> df = statData('sample.bg')
+    >>> df.head()
+    chrom genome_size a b a_rate b_rate
+    chr1 3000000000 1600000000 1400000000 0.53 0.47
+    ...
+    """
+    df = pd.read_csv(bg, header=None, sep='\t', index_col=0, 
+        names=[ 'chrom', 'start', 'end', 'pca1'])
+    df['type'] = df['pca1'].map(lambda x: 'A' if x>=0 else 'B')
+    chroms = sorted(set(df.index.to_list()), key=lambda x: x[3:])
+
+    header = ('chrom', 'genome_size', 'a', 'b', 'a_rate', 'b_rate')
+    db = {i:[] for i in header}
+    
+    for chrom in chroms:
+        tmp_df = df.loc[chrom]
+        a_df = tmp_df[tmp_df.type == 'A']
+        b_df = tmp_df[tmp_df.type == 'B']
+        alen = sum(a_df.end - a_df.start)
+        blen = sum(b_df.end - b_df.start)
+        for i, j in zip(header, [chrom, alen+blen, alen, blen, 
+                alen*1.0/(alen+blen), blen*1.0/(alen+blen)]):
+            db[i].append(j)
+        res_df = pd.DataFrame(db)
+        
+    return res_df
 
 def statAB_old(args):
     """
@@ -1104,9 +1213,13 @@ def statAB(args):
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
     pOpt = p.add_argument_group('Optional arguments')
-    pReq.add_argument('bg', nargs="*", help='input A/B compartments bedgraph file')
+    pReq.add_argument('bg', nargs="+", help='input A/B compartments bedgraph file')
     pOpt.add_argument('-o', '--out', default='statAB.pdf', 
             help='output file [default: %(default)s]')
+    pOpt.add_argument('--plot_total', action='store_true', default=False,
+            help='plot the total result [default: %(default)s]')
+    pOpt.add_argument('--labels', nargs="*", 
+            help='labels of total barplot ylabel [default: bg_prefix]')
     pOpt.add_argument('--plot', action='store_true', default=False, 
             help='plot the result [default: %(default)s]')
     pOpt.add_argument('-h', '--help', action='help',
@@ -1114,39 +1227,12 @@ def statAB(args):
     
     args = p.parse_args(args)
 
-    def get_chromsize(df):
-        chroms = set(df.index.to_list())
-        size = 0
-        for chrom in chroms:
-            size += df.loc[chrom].end.max()
-        return size
-    
-    def statData(bg):
-        df = pd.read_csv(bg, header=None, sep='\t', index_col=0, 
-            names=[ 'chrom', 'start', 'end', 'pca1'])
-        df['type'] = df['pca1'].map(lambda x: 'A' if x>=0 else 'B')
-        chroms = sorted(set(df.index.to_list()), key=lambda x: x[3:])
-
-        header = ('chrom', 'genome_size', 'a', 'b', 'a_rate', 'b_rate')
-        db = {i:[] for i in header}
-        
-        for chrom in chroms:
-            tmp_df = df.loc[chrom]
-            a_df = tmp_df[tmp_df.type == 'A']
-            b_df = tmp_df[tmp_df.type == 'B']
-            alen = sum(a_df.end - a_df.start)
-            blen = sum(b_df.end - b_df.start)
-            for i, j in zip(header, [chrom, alen+blen, alen, blen, 
-                    alen*1.0/(alen+blen), blen*1.0/(alen+blen)]):
-                db[i].append(j)
-            res_df = pd.DataFrame(db)
-            
-        return res_df
+    colors = ("#bb4853", "#209093")
     
     def plot(ax, idx, df):
         data = np.array([df.a_rate, df.b_rate]).T
         data_cum = data.cumsum(axis=1)
-        colors = ("#bb4853", "#209093")
+        
         labels = np.array(df.chrom)[::-1]
         for i, (colname, color) in enumerate(zip(_types, colors)):
             widths = data[:, i][::-1]
@@ -1160,16 +1246,42 @@ def statAB(args):
         
         ax.xaxis.set_visible(False)
         return ax
+    
+    def plot_total(ax, idx, df, label):
+        genome_size = df.genome_size.sum()
+        a_len = df.a.sum()
+        b_len = df.b.sum()
+        a_rate = a_len / genome_size
+        b_rate = b_len / genome_size
+        data = np.array([a_rate, b_rate])
+        data_cum = data.cumsum()
+
+        for i, (colname, color) in enumerate(zip(_types, colors)):
+            widths = data[i]
+            starts = data_cum[i] - widths
+            ax.barh(label, widths, left=starts, height=0.5, label=colname)
+            ax.tick_params(left='off', labelsize=16, width=0)
+            xcenters = starts + widths/2
+            #for y, (x, c) in enumerate(zip(xcenters, widths)):
+            x = xcenters
+            y = 0
+            c = widths
+            ax.text(x, y, "{:.2%}".format(c), ha='center', va='center', fontsize=16)
+            ax.xaxis.set_visible(False)
+            ax.tick_params(labelsize=12, width=0)
+            #ax.yaxis.set_visible(False)
+
     _types = ('A', 'B')
     df_list = []
     for bg in args.bg:
         df = statData(bg)
-        df.to_csv(bg.rsplit('.', 1)[0] + '.tsv', sep='\t', header=None, index=None)
+        df.to_csv(bg.rsplit('.', 1)[0] + '_stat.tsv', sep='\t', header=None, index=None)
         df_list.append(df)
     
     if args.plot:
         fig, axes = plt.subplots(1, len(df_list), figsize=(3, 3*len(df_list)))
-
+        axes = np.array(axes)
+        print(list(map(type, axes)))
         for i, (df, ax) in enumerate(zip(df_list, axes)):
             plot(ax, i, df)
         
@@ -1177,8 +1289,26 @@ def statAB(args):
                 loc='lower left')
         sns.despine(bottom=True,left=True)
         plt.savefig(args.out, dpi=300, bbox_inches='tight')
-
+        plt.savefig(args.out.rsplit('.', 1)[0] + '.png', 
+                dpi=300, bbox_inches='tight')
     
+    if args.plot_total:
+        if not args.labels:
+            labels = list(map(lambda x: x.split("_")[0], args.bg))
+        else:
+            labels = args.labels
+        
+        fig, axes = plt.subplots(len(df_list), 1, figsize=(10, len(df_list)))
+        axes = np.array(axes)
+        for i, (df, ax) in enumerate(zip(df_list, axes)):
+            plot_total(ax, i, df, labels[i])
+        plt.legend(bbox_to_anchor=(1, 0.5))
+        sns.despine(bottom=True, left=True)
+        plt.savefig(args.out, dpi=300, bbox_inches='tight')
+        plt.savefig(args.out.rsplit('.', 1)[0] + '.png', 
+                dpi=300, bbox_inches='tight')
+        
+
 def buscoGeneDist(args):
     """
     %(prog)s sample_eigen1.bg all_gene.bed busco_gene.bed [Options]
@@ -1194,6 +1324,10 @@ def buscoGeneDist(args):
     pReq.add_argument('bg', help='bedGraph file of compartment pca.')
     pReq.add_argument('genebed', help='bed file of all genes')
     pReq.add_argument('buscobed', help='bed file of busco genes.')
+    pOpt.add_argument('-l', '--label', type=str, default='BUSCO',
+            help='the label of legend [default: %(default)s')
+    pOpt.add_argument('--include', action='store_true', default=False, 
+            help='include the buscogene to random selece [default: %(default)s')
     pOpt.add_argument('-f', '--fraction', default=0.5, type=float, 
             help='Minimum overlap requred as a fraction of B [default: %(default)s]')
     pOpt.add_argument('-o', '--out', 
@@ -1203,7 +1337,7 @@ def buscoGeneDist(args):
     
     args = p.parse_args(args)
 
-    prefix = args.bg.rsplit("_")[0]
+    prefix = op.basename(args.bg).rsplit("_")[0]
     out = prefix + "_busco_gene_dist.pdf" if not args.out else args.out
     
     ## annotate compartment
@@ -1215,7 +1349,7 @@ def buscoGeneDist(args):
     cmd_gene = cmd_formatter.format(tsv, args.genebed, args.fraction, 
             prefix + '_gene_compartment.tsv')
     cmd_busco = cmd_formatter.format(tsv, args.buscobed, args.fraction,
-            prefix + '_busco_compartment.tsv')
+            prefix + '_{}_compartment.tsv'.format("_".join(args.label.split())))
     os.system(cmd_gene)
     os.system(cmd_busco)
 
@@ -1237,10 +1371,13 @@ def buscoGeneDist(args):
         return res
     ## import data
     gene_compartment = importData(prefix + '_gene_compartment.tsv')
-    busco_compartment = importData(prefix + '_busco_compartment.tsv')
+    busco_compartment = importData(prefix + 
+                        '_{}_compartment.tsv'.format("_".join(args.label.split())))
 
     ## remove busco gene from all genes
-    gene_compartment = gene_compartment[~gene_compartment['gene'].isin(busco_compartment['gene'])]
+    if not args.include:
+        gene_compartment = gene_compartment[~gene_compartment['gene'].isin(
+                                                    busco_compartment['gene'])]
     ## iter random select gene 
     randomA = iter_random(gene_compartment, len(busco_compartment), _type= 'A')
     randomB = iter_random(gene_compartment, len(busco_compartment),_type = 'B')
@@ -1249,14 +1386,289 @@ def buscoGeneDist(args):
     sns.set()
     ax = sns.distplot(randomA, color='#a83836', label='Random genes in A')
     sns.distplot(randomB, ax=ax, color='#275e8c', label='Random genes in B')
-    ax.axvline(buscoA, 1, 0,linestyle='-.', color='#a83836', label='BUSCO genes in A')
-    ax.axvline(buscoB, 1, 0, linestyle='-.', color='#275e8c', label='BUSCO genes in B')
+    ax.axvline(buscoA, 1, 0,linestyle='-.', color='#a83836',
+            label='{} genes in A'.format(args.label))
+    ax.axvline(buscoB, 1, 0, linestyle='-.', color='#275e8c', 
+            label='{} genes in B'.format(args.label))
     ax.tick_params(labelsize=12)
     ax.set_xlabel('Gene Numbers', fontsize=14)
     ax.set_ylabel('Frequency', fontsize=14)
     ax.legend()
     plt.savefig(out, dpi=300, bbox_inches='tight')
     logging.debug('Done, picture is in `{}`'.format(out))
+
+
+def getSwitchLink(args):
+    """
+    %(prog)s <sample1.bg> <sample2.bg> [Options]
+
+        To get two sample AB swith links for plotting circos,
+            also can return 
+        **sample.bg
+            chrom start end value
+        
+    """
+    p = p=argparse.ArgumentParser(prog=getSwitchLink.__name__,
+                        description=getSwitchLink.__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('bg1', help='bedGraph of pca1 values')
+    pReq.add_argument('bg2', help='bedGraph of pca1 values')
+    pReq.add_argument('-o', '--out', type=str, required=True,
+            help='output file of all annotated table')
+    pOpt.add_argument('-1', '--suffix1', type=str, default='',
+            help='suffix of bg1 chromosome id [default: %(default)s]')
+    pOpt.add_argument('-2', '--suffix2', type=str, default='',
+            help='suffix of bg2 chromosome id [default: %(default)s]')
+    pOpt.add_argument('--shrink', default=0, type=int,
+            help='shrink the link ranges [default: %(default)s]')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    
+    args = p.parse_args(args)
+    df1 = pd.read_csv(args.bg1, 
+                        sep='\t', 
+                        header=None, 
+                        names=('chrom1', 'start1', 
+                                'end1', 'value1'))
+    df2 = pd.read_csv(args.bg2, 
+                        sep='\t', 
+                        header=None, 
+                        names=('chrom2', 'start2',
+                                'end2', 'value2'))
+    df_concatted = pd.concat([df1, df2], axis=1)
+    df_concatted['type'] = df_concatted.apply(switch_type_in_df, 
+                                                                axis=1)
+    df_concatted.to_csv(args.out, sep='\t', header=None, index=None)
+    logging.debug('Successfule output all annotated file to `{}`'.format(args.out))
+    for _type in set(df_concatted.type):
+        tmp_df = df_concatted[df_concatted.type == _type].copy()
+        
+        tmp_df['chrom1'] = tmp_df['chrom1'].map(lambda x: x + args.suffix1)
+        tmp_df['chrom2'] = tmp_df['chrom2'].map(lambda x: x + args.suffix2)
+        link_df = tmp_df[['chrom1', 'start1', 'end1',
+                            'chrom2', 'start2', 'end2']].copy()
+        if args.out is not sys.stdout:
+            link_out = args.out.rsplit('.', 1)[0] + '_{}.links'.format(_type)
+        else:
+            link_out = args.out
+        link_df['start1'] = link_df['start1'] + args.shrink
+        link_df['end1'] = link_df['end1'] - args.shrink
+        link_df['start2'] = link_df['start2'] + args.shrink
+        link_df['end2'] = link_df['end2'] + args.shrink
+        link_df.to_csv(link_out, sep='\t', header=None, index=None)
+        logging.debug('Successful output `{}` to `{}`'.format(_type, link_out))
+
+
+
+def import_bg5(infile):
+    """
+    To import ab data of bedgraph five columns.
+        **chrom start end pca1 score
+    """
+    df = pd.read_csv(infile, 
+                     sep='\t', 
+                     header=None, 
+                     index_col=None, 
+                     names=('chrom', 'start', 
+                            'end', 'pca1', 
+                            'score'))
+    df['type'] = df.pca1.map(lambda x: 'A' if x >= 0 else 'B')
+    return df
+
+
+def plotBoxPerChrom(args):
+    """
+    %(prog)s <infile.bg> [Options]
+
+    To plot boxplot of some data of per A/B compartment per chromosomes.
+    bg file: chrom start end pca1 score
+
+
+    ** if using xlabel or ylabel options, 
+        you can also use latex to set special format (italic, up ...)
+        italic: `"$\mathic{{trans}}$"`
+        scientific count: `"$10 \times 6$"`
+    """
+
+    p = p=argparse.ArgumentParser(prog=plotBoxPerChrom.__name__,
+                        description=plotBoxPerChrom.__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('bg', help='bedgraph file of ab_data (five columns)')
+    pOpt.add_argument('--chrom', nargs="+", 
+            help='chromosomes order of picture [default: all]')
+    pOpt.add_argument('--scale', type=int, default=1,
+            help='scale of yticks [default: %(default)s]')
+    pOpt.add_argument('--xlabel', default='Chromosomes',
+            help='xlabel of picture [default: %(default)s]')
+    pOpt.add_argument('--ylabel', default='', 
+            help='ylabel of picture [default: %(default)s]')
+    pOpt.add_argument('-o', '--out', default='',
+            help='output file of picture [default: inputfile.pdf]' )
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    
+    args = p.parse_args(args)
+
+    from matplotlib.cbook import boxplot_stats
+    from ..apps.utilities import wi_test
+
+    whiskerprops = dict(linestyle='--')
+    ab_df = import_bg5(args.bg)
+    ab_df['score'] = ab_df['score'] / float(args.scale)
+    if not args.chrom:
+        chrom_list = sorted(set(ab_df.chrom))
+    
+    fig, ax = plt.subplots(figsize=(10, 5))
+    sns.boxplot(x='chrom', y='score', 
+            data=ab_df, hue='type', 
+            ax=ax, hue_order=['A', 'B'],
+            palette=['#a83836', '#265e8a'],
+            showfliers=False,
+           saturation=1, whiskerprops=whiskerprops)
+    ## beautiful
+    ax.tick_params(width=1.5, labelsize=13)
+    ax.spines['bottom'].set_linewidth(1.5)
+    ax.spines['left'].set_linewidth(1.5)
+    ax.set_xticklabels(chrom_list, rotation=45)
+    ax.set_xlabel(args.xlabel, fontsize=16)
+    ax.set_ylabel(args.ylabel, fontsize=16)
+    sns.despine(trim=True)
+    plt.legend(fontsize=13)
+
+    for i, chrom in enumerate(chrom_list):
+        a_data = ab_df[(ab_df.chrom == chrom) & (ab_df.type == 'A')].score 
+        b_data = ab_df[(ab_df.chrom == chrom) & (ab_df.type == 'B')].score 
+        
+        pvalue = wi_test(a_data, b_data)
+        if 0.01 <= pvalue < 0.05:
+            star = '*'
+        elif pvalue < 0.01:
+            star = "**"
+        else:
+            star = ''
+        
+        a_whishi = boxplot_stats(a_data)[0]['whishi']
+        b_whishi = boxplot_stats(b_data)[0]['whishi']
+        h = max(a_whishi, b_whishi)
+        plt.text(i, h , star, fontsize=12, ha='center')
+    if not  args.out:
+        out = op.basename(args.bg).rsplit('.', 1)[0] + '_perchrom.pdf'
+    
+    plt.savefig(out, dpi=300, bbox_inches='tight')
+    plt.savefig(out.rsplit('.', 1)[0] + '.png', 
+            dpi=300, bbox_inches='tight')
+
+
+def plotBoxMultiSamples(args):
+    """
+    %(prog)s <infile.bg> [Options]run
+
+    To plot boxplot of some data of per A/B compartment per samples 
+            in one chromosome.
+    bg file: chrom start end pca1 score
+
+
+    ** if using xlabel or ylabel options, 
+        you can also use latex to set special format (italic, up ...)
+        italic: `"$\mathic{{trans}}$"`
+        scientific count: `"$10 \times 6$"`
+    """
+
+    p = p=argparse.ArgumentParser(prog=plotBoxMultiSamples.__name__,
+                        description=plotBoxMultiSamples.__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('bg', nargs="+", 
+            help='bedgraph file of ab_data (five columns)')
+    pReq.add_argument('--chrom', nargs=1, 
+            help='chromosomes of picture', required=True)
+    pOpt.add_argument('--scale', type=int, default=1,
+            help='scale of yticks [default: %(default)s]')
+    pOpt.add_argument('--xticklabels', nargs='*', 
+            help='xticklabels of picture, length must equal to `input file`'
+                    '[default: bg file prefix')
+    pOpt.add_argument('--xlabel', default='Chromosomes',
+            help='xlabel of picture [default: %(default)s]')
+    pOpt.add_argument('--ylabel', default='', 
+            help='ylabel of picture [default: %(default)s]')
+    pOpt.add_argument('--plotWidth', type=float, default=4, 
+            help='Plot width in cm. [default: %(default)s]')
+    pOpt.add_argument('--plotHeight', type=float, default=5,
+            help='Plot height in cm. [default: %(default)s]')
+    pOpt.add_argument('-o', '--out', default='',
+            help='output file of picture [default: inputfile.pdf]' )
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    
+    args = p.parse_args(args)
+
+    from matplotlib.cbook import boxplot_stats
+    from ..apps.utilities import wi_test
+
+    whiskerprops = dict(linestyle='--')
+
+
+    if not args.xticklabels:
+        prefixes = list(map(lambda x: x.split('_', 1)[0], args.bg))
+    else:
+        prefixes = args.xticklabels
+    
+    df_list = []
+    for i, bg in enumerate(args.bg):
+        
+        df = import_bg5(bg)
+        tmp_df = df[df['chrom'] == args.chrom[0]]
+        tmp_df['chrom'] = tmp_df.chrom.map(lambda x: prefixes[i])
+        tmp_df['score'] = tmp_df['score'] / float(args.scale)
+        df_list.append(tmp_df)
+
+    ab_df = pd.concat(df_list, axis=0)
+    fig, ax = plt.subplots(figsize=(args.plotWidth, args.plotHeight))
+    sns.boxplot(x='chrom', y='score', 
+            data=ab_df, hue='type', 
+            ax=ax, hue_order=['A', 'B'],
+            palette=['#a83836', '#265e8a'],
+            showfliers=False,
+           saturation=1, whiskerprops=whiskerprops)
+    ## beautiful
+    ax.tick_params(width=1.5, labelsize=13)
+    ax.spines['bottom'].set_linewidth(1.5)
+    ax.spines['left'].set_linewidth(1.5)
+    ax.set_xticklabels(prefixes, rotation=45)
+    ax.set_xlabel(args.xlabel, fontsize=16)
+    ax.set_ylabel(args.ylabel, fontsize=16)
+    sns.despine(trim=True)
+    plt.legend(fontsize=13)
+
+    for i, prefix in enumerate(prefixes):
+        a_data = ab_df[(ab_df.chrom == prefix) & (ab_df.type == 'A')].score 
+        b_data = ab_df[(ab_df.chrom == prefix) & (ab_df.type == 'B')].score 
+        
+        pvalue = wi_test(a_data, b_data)
+        if 0.01 <= pvalue < 0.05:
+            star = '*'
+        elif pvalue < 0.01:
+            star = "**"
+        else:
+            star = ''
+        
+        a_whishi = boxplot_stats(a_data)[0]['whishi']
+        b_whishi = boxplot_stats(b_data)[0]['whishi']
+        h = max(a_whishi, b_whishi)
+        plt.text(i, h , star, fontsize=12, ha='center')
+    if not  args.out:
+        out = '{}_ab_boxplot_{}.pdf'.format( "-".join(map(op.basename, 
+                                        prefixes)), args.chrom[0])
+    
+    plt.savefig(out, dpi=300, bbox_inches='tight')
+    plt.savefig(out.rsplit('.', 1)[0] + '.png', 
+            dpi=300, bbox_inches='tight')
+
 
 if __name__ == "__main__":
     main()
