@@ -1015,6 +1015,7 @@ def quickPlotTAD(args):
     %(prog)s <sample_4000.iced.cool> <sample.domain> [Options]
 
         Quick plot picture to view all TADs results.
+
     """
 
     p=argparse.ArgumentParser(prog=quickPlotTAD.__name__,
@@ -1026,16 +1027,28 @@ def quickPlotTAD(args):
     pReq.add_argument('domain', help='domain file of TAD, '
                         'three columns(chrom start end).')
     pReq.add_argument('chrom_size', help='chromosome sizes file')
-    pOpt.add_argument('--min_value', defaule=3, type=str, 
+    pOpt.add_argument('--bg', default=None, 
+            help='Direction index bedGraph file [default: %(default)]')
+    pOpt.add_argument('--min_value', default=3, type=str, 
             help='min value of hic matrix [default: %(default)s]')
+    pOpt.add_argument('-d', '--depth', default=None, type=str,
+            help='hicmatrix depth [default: window*1.2].')
     pOpt.add_argument('-w', '--window', type=float, default=5e6,
             help='window of chromosome sizes [default: %(default)s]')
     pOpt.add_argument('-o', '--outdir', default='quickPlotTAD_result',
             help='outdir of result [default: %(default)s]')
+    pOpt.add_argument('--pdf', default=False, action='store_true',
+            help='if output pdf format [default: %(default)s]')
     pOpt.add_argument('-h', '--help', action='help',
             help='show help message and exit.')
     
     args = p.parse_args(args)
+    
+    if not args.depth:
+        depth = 1.2 * args.window
+    else:
+        depth = args.depth
+    
 
     import configparser
     from TDGP.apps.utilities import makeChromWindows
@@ -1044,8 +1057,8 @@ def quickPlotTAD(args):
     cf.add_section('hic matrix')
     cf.set('hic matrix', 'file', args.cool)
     cf.set('hic matrix', 'title', 'Hi-C')
-    cf.set('hic matrix', 'depth', '1200000')
-    cf.set('hic matrix', 'min_value', args.min_value)
+    cf.set('hic matrix', 'depth', str(int(depth)))
+    cf.set('hic matrix', 'min_value', str(args.min_value))
     cf.set('hic matrix', 'transform', 'log1p')
     cf.set('hic matrix', 'file_type', 'hic_matrix')
 
@@ -1056,6 +1069,16 @@ def quickPlotTAD(args):
     cf.set('tad', 'color', 'none')
     cf.set('tad', 'overlay previous', 'share-y')
 
+    
+    if args.bg:
+        cf.add_section("spacer")
+        cf.add_section("DI_bg")
+        cf.set('DI_bg', 'file', args.bg)
+        cf.set('DI_bg', 'height', '4')
+        cf.set('DI_bg', 'title', 'DI')
+        cf.set('DI_bg', 'negative color', "#0B1D51")
+        cf.set('DI_bg', 'color', '#787596')
+
     cf.add_section('x-axis')
     cf.set('x-axis', 'where', 'bottom')
 
@@ -1063,14 +1086,16 @@ def quickPlotTAD(args):
         cf.write(f)
     
     chrom_windows_db = makeChromWindows(args.chrom_size, args.window)
-    plot_cmd_formatter = "pyGenomeTracks --tracks quickPlotTAD.tad.ini -o {1}/{0} --region {0}"
+    plot_cmd_formatter = "conda run -n hicexplorer pyGenomeTracks --tracks quickPlotTAD.tad.ini -o {1}/{0}.{2} --region {0}"
     
+    ext = 'pdf' if args.pdf else 'png'
     if not op.exists(args.outdir):
         os.makedirs(args.outdir)
     for chrom in chrom_windows_db:
         for (start, end) in chrom_windows_db[chrom]:
             region = '{}:{}-{}'.format(chrom, start, end)
-            print(plot_cmd_formatter.format(region, args.outdir))
+            print(plot_cmd_formatter.format(region, args.outdir, ext),
+                    file=sys.stdout)
     
 
 if __name__ == "__main__":

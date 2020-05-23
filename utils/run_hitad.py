@@ -14,6 +14,8 @@ import sys
 
 
 from optparse import OptionParser
+from TDGP.apps.grid import Cluster
+
 
 p = OptionParser(__doc__)
 p.add_option('-t', '--threads', type=int, default=12,
@@ -28,15 +30,14 @@ opts, args = p.parse_args()
 if len(args) != 2:
     sys.exit(p.print_help())
 
-matrix, bed = args
+matrix, bed= args
+
 
 if not op.exists(matrix):
     sys.stderr.write('ERROR: No such file of %s'%matrix)
     sys.exit()
 if not op.exists(bed):
     sys.stderr.write('ERROR: No such file of %s'%bed)
-
-
 
 ncpu = opts.threads
 if opts.exclude:
@@ -47,13 +48,15 @@ if opts.exclude:
 else:
     exclude = ""
 
-
+header = Cluster().get_header(name='run_{}.sh'.format(matrix.replace('.matrix', '')), 
+                                threads=ncpu)
 out_prefix = """
 bed={bed}
 matrix={matrix}
 ncpu={ncpu}
 exclude='{exclude}'
-""".format(bed=bed, matrix=matrix, ncpu=ncpu, exclude=exclude)
+""".format(bed=bed, matrix=matrix, ncpu=ncpu, 
+         exclude=exclude)
 
 out = """
     
@@ -80,12 +83,16 @@ hitad -O ${matrix%%.matrix}.hitad_out.txt -d ${matrix%%.matrix}.ini --logFile hi
 
 hitad_command = hitad_command + "\ntad_merge.py ${matrix%%.matrix}.hitad_out.txt > ${matrix%%.matrix}.hitad_out.merged.txt"
 hitad_command = hitad_command + "\ncooler dump -t bins ${matrix%%.matrix}.cool > ${matrix%%.matrix}_DI.bg"
+hitad_command = hitad_command + "\ncooler dump -t chroms ${matrix%%.matrix}.cool > ${matrix%%.matrix}.chromsizes"
+hitad_command = hitad_command + "\ncut -f 1-3 ${matrix%%.matrix}.hitad_out.merged.txt > ${matrix%%.matrix}.hitad.domain"
+hitad_command = hitad_command + "\npython -m TDGP.analysis.tad quickPlotTAD ${matrix%%.matrix}.cool "
+hitad_command = hitad_command + "${matrix%%.matrix}.hitad.domain ${matrix%%.matrix}.chromsizes | parallel -j $ncpu {}"
 #hitad_command = hitad_command + "\nsort -k1,1 -k2,2n ${matrix%%.matrix}_DI.bg > ${matrix%%.matrix}_DI.sorted.bg"
 #hitad_command = hitad_commdan + "\nbedGraphToBigWig ${matrix%%.matrix}_DI.sorted.bg "
 
 with open('run_{}.sh'.format(matrix.replace('.matrix', '')), 'w') as f_out:
-    f_out.write(out_prefix + out + hitad_command)
+    f_out.write(header + out_prefix + out + hitad_command)
 
 if opts.no_qsub:
-    os.system('qsub -pe mpi {} -j y -q all.q -cwd -S /bin/bash {}'.format(ncpu, 'run_{}.sh'.format(matrix.replace('.matrix', ''))))
+    os.system('qsub {}'.format('run_{}.sh'.format(matrix.replace('.matrix', ''))))
 

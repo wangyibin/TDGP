@@ -12,6 +12,7 @@ import os
 import os.path as op
 import sys
 
+import numpy as np
 
 from collections import defaultdict
 
@@ -162,3 +163,42 @@ def wi_test(data1, data2):
     wi = stats.ranksums(data1, data2)
     return wi.pvalue
 
+
+def bezier(o, c1, c2, d, step=0.05):
+    """
+    Return cubic beizer curve points array: 
+    <http://www.moshplant.com/direct-or/bezier/math.html>
+    o: origin, c1, c2: control, d: detination
+
+    Returns:
+    --------
+    out: `array` xt, yt
+
+    Examples:
+    --------
+    >>> beizer((0 ,4,), ( 2.5, 4), (2.5, 0), (5, 0))
+    (array([0.      , 0.356875, 0.68    , 0.973125, 1.24    , 1.484375,
+        1.71    , 1.920625, 2.12    , 2.311875, 2.5     , 2.688125,
+        2.88    , 3.079375, 3.29    , 3.515625, 3.76    , 4.026875,
+        4.32    , 4.643125, 5.      ]),
+    array([4.   , 3.971, 3.888, 3.757, 3.584, 3.375, 3.136, 2.873, 2.592,
+        2.299, 2.   , 1.701, 1.408, 1.127, 0.864, 0.625, 0.416, 0.243,
+        0.112, 0.029, 0.   ]))
+
+    """
+    t = np.arange(0, 1 + step, step)
+    pts = (o, c1, c2, d)
+    px, py = zip(*pts)
+    def get_array(pts):
+        # calculation
+        o, c1, c2, d = pts
+        c = 3 * (c1 - o)
+        b = 3 * (c2 - c1) - c
+        a = d - o - c - b
+
+        tsquared = t ** 2
+        tcubic = tsquared * t
+
+        return a * tcubic + b * tsquared + c * t + o
+    
+    return get_array(px), get_array(py)

@@ -13,6 +13,7 @@ import numpy as np
 
 
 import cooler
+import glob
 import matplotlib as mpl 
 mpl.use('Agg')
 import matplotlib.pyplot as plt
@@ -20,8 +21,10 @@ import scipy
 import seaborn as sns
 import os
 import os.path as op
+import pandas as pd
 import sys
 
+from argparse import Namespace
 from collections import OrderedDict, defaultdict
 from itertools import chain
 from joblib import Parallel, delayed, Memory
@@ -38,6 +41,7 @@ debug()
 def main():
 
     actions = (
+            ('validStat', 'stat hicpro valid data'),
             ('plotCisTrans', 'plot the barplot of cis and trans interactions'),
             ("plotDistDensity", "Plot the IDE"),
             ("plotIDEMulti", 'plot multi sample IDE'),
@@ -331,6 +335,134 @@ class ValidPairs(BaseFile):
 
 
 ## outside command ##
+
+def validStat(args):
+    """
+    %(prog)s <statpath> <outfile>
+
+        Stat the hicpro valid pais dat to a table
+    """
+    p=argparse.ArgumentParser(prog=validStat.__name__,
+                        description=validStat.__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('statpath', 
+            help='the path of stat file')
+    pReq.add_argument('outfile', 
+            help='output file')
+    pOpt.add_argument('-f', '--format', choices=['1', '2'], 
+            default='1',
+            help='the format of table, {1|multi line; 2|one line} [default: %(default)s]')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+        
+    
+    args = p.parse_args(args)
+
+    def import_stat(statfile):
+        logging.debug('Read `{}`'.format(statfile))
+        df = pd.read_csv(statfile, 
+                            sep='\t',
+                            header=None, 
+                            index_col = 0,
+                            names=['item', 'count'],
+                            usecols=[0, 1],
+                            comment="#")
+        return df
+
+    def get_statfile(path):
+        files = glob.glob(path + "/*stat")
+        db = {}
+        for stat in files:
+            name = op.basename(stat).rsplit('.', 1)[-1]
+            if name not in db:
+                db[name] = import_stat(stat)
+            else:
+                db[name + "2"] = import_stat(stat)
+        
+        return Namespace(**db)
+
+    def main(path, out, fmt='1'):
+        statfiles = get_statfile(path)
+        mRS = statfiles.mRSstat
+        mpair = statfiles.mpairstat
+        mmap = statfiles.mmapstat
+        mmap = statfiles.mmapstat2
+        merge = statfiles.mergestat
+        
+        db = OrderedDict()
+        if fmt == '1':
+
+            db["Statistics of mapping"] = ""
+            db["Clean Paired-end Reads"] = "{:,}".format(mpair.loc['Total_pairs_processed']['count'])
+            db["Unmapped Paired-end Reads"] = "{:,}".format(mpair.loc['Unmapped_pairs']['count'])
+            db['Unmapped Paired-end Reads Rate (%)'] = "{:.2f}".format(1.0 * mpair.loc['Unmapped_pairs']['count']
+                                                                    / mpair.loc['Total_pairs_processed']['count']
+                                                                    * 100.0)
+            db['Paired-end Reads with Singleton'] = "{:,}".format(mpair.loc['Pairs_with_singleton']['count'])
+            db['Paired-end Reads with Singleton Rate (%)'] = "{:.2f}".format(1.0 * mpair.loc['Pairs_with_singleton']['count']
+                                                                    / mpair.loc['Total_pairs_processed']['count'] * 100
+                                                                )
+            db['Multi Mapped Paired-end Reads'] = "{:,}".format(mpair.loc['Multiple_pairs_alignments']['count'])
+            db['Multi Mapped Rate (%)'] = "{:.2f}".format(1.0 * mpair.loc['Multiple_pairs_alignments']['count']
+                                                                    / mpair.loc['Total_pairs_processed']['count'] * 100
+                                                                )
+            db['Low Mapped Quality Reads'] = "{:,}".format(mpair.loc['Low_qual_pairs']['count'])
+            db['Low Quality Mapped Rate (%)'] = "{:.2f}".format(1.0 * mpair.loc['Low_qual_pairs']['count']
+                                                                    / mpair.loc['Total_pairs_processed']['count'] * 100)
+            db['Unique Mapped Paired-end Reads'] = "{:,}".format(mpair.loc['Unique_paired_alignments']['count'])
+            db['Unique Mapped Rate (%)'] =  "{:.2f}".format(1.0 * mpair.loc['Unique_paired_alignments']['count']
+                                                                    / mpair.loc['Total_pairs_processed']['count'] * 100)
+            db['Statistics of valid reads'] = ""
+            db['Unique Mapped Paired-end Reads'] = "{:,}".format(mpair.loc['Unique_paired_alignments']['count'])
+            db['Dangling End Paired-end Reads'] = "{:,}".format(mRS.loc['Dangling_end_pairs']['count'])
+            db['Dangling End Rate (%)'] = "{:.2f}".format(1.0 * mRS.loc['Dangling_end_pairs']['count'] /
+                                                        mpair.loc['Unique_paired_alignments']['count'] * 100)
+            db['Self Circle Paired-end Reads'] = "{:,}".format(mRS.loc['Self_Cycle_pairs']['count'])
+            db['Self Circle Rate (%)'] = "{:.2f}".format(1.0 * mRS.loc['Self_Cycle_pairs']['count'] /
+                                                        mpair.loc['Unique_paired_alignments']['count'] * 100)
+            db['Dumped Paired-end Reads'] = "{:,}".format(mRS.loc['Dumped_pairs']['count'])
+            db['Dumped Rate (%)'] = "{:.2f}".format(1.0 * mRS.loc['Dumped_pairs']['count'] /
+                                                        mpair.loc['Unique_paired_alignments']['count'] * 100)
+            
+            db['Interaction Paried-end Reads'] = '{:,}'.format(merge.loc['valid_interaction']['count'])
+            db['Interaction Rate (%)'] = '{:.2f}'.format(1.0 * merge.loc['valid_interaction']['count'] /
+                                                        mpair.loc['Unique_paired_alignments']['count'] * 100)
+            db['Lib Valid Paired-end Reads'] = '{:,}'.format(merge.loc['valid_interaction']['count'])
+            db['Lib Valid Rate (%)']= '{:.2f}'.format(1.0 * merge.loc['valid_interaction_rmdup']['count'] /
+                                                        merge.loc['valid_interaction']['count'] * 100)
+            db['Lib Dup Rate (%)'] = '{:.2f}'.format(100- (1.0 * merge.loc['valid_interaction_rmdup']['count'] /
+                                                        merge.loc['valid_interaction']['count'] * 100))
+        elif fmt == '2':
+            db['Raw reads'] = '{:,}'.format(mpair.loc['Total_pairs_processed']['count'])
+            db['Mapped pairs'] = '{:,}'.format(mpair.loc['Total_pairs_processed']['count'] - 
+                                                    mpair.loc['Unmapped_pairs']['count'])
+            db['Unique pairs'] = '{:,}'.format(mpair.loc['Unique_paired_alignments']['count'])
+            db['Self-circle'] = '{:,}'.format(mRS.loc['Self_Cycle_pairs']['count'])
+            db['Dangling'] = '{:,}'.format(mRS.loc['Dangling_end_pairs']['count'])
+            db['PCR duplicate'] = '{:,}'.format(merge.loc['valid_interaction']['count'] -
+                                                merge.loc['valid_interaction_rmdup']['count'])
+            db['Valid contact'] = '{:,}'.format(merge.loc['valid_interaction_rmdup']['count'])
+
+
+        df = pd.DataFrame([db])
+        df = df.T if fmt == '1' else df
+        header = None if fmt == '1' else True
+        index = True if fmt == '1' else None
+        if out.rsplit(".")[-1] in ['xls', 'xlsx']:
+            df.to_excel(out, header=header, index=index)
+        else:
+            df.to_csv(out, sep='\t', header=header, index=index)
+        logging.debug('Output file to `{}`'.format(out))
+
+
+        
+    main(args.statpath, args.outfile, args.format)
+    
+    
+    
+
 def plotDistDensity(args):
     """
     %prog all.validpairs [Options]

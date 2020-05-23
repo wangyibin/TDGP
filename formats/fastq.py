@@ -62,6 +62,7 @@ def splitfastq(infile, outdir, nreads):
     if retcode !=0:
         logging.error('Failed to split infile with return code {}'.format(retcode))
         sys.exit(1)
+    
     files = glob(prefix + "*")
     files.sort()
     res = []
@@ -74,6 +75,7 @@ def splitfastq(infile, outdir, nreads):
                 op.dirname(i),
                 op.basename(i)[-2:] + "_" +
                 op.basename(i)[:-7] + ".fastq"))
+    #res = glob(op.dirname(prefix) + "/*fastq")
     return res
     
 ## out command
@@ -113,7 +115,7 @@ def splitFastq(args):
         return files
     task_list = [(fq, out, args.nreads) for (fq, out) in zip(args.fastq, outs)]
     res = pool.map(splitfq, task_list)
-    res = np.append(*res)
+    res = np.append([], res)
     cmd_func = lambda x: "gzip {0}".format(x)
     gzip_cmd = 'gzip_cmd.list'
     with open(gzip_cmd, 'w') as fo:

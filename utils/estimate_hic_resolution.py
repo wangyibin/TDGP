@@ -81,7 +81,7 @@ def dotplot(values, outprefix, percent=0.8):
     plt.title("Hi-C")
     plt.savefig('{}.pdf'.format(outprefix), dpi=300)
 
-def main(infile, chrom_list, threads=20):
+def main(infile, chrom_list, threads=10):
     outprefix = infile.split("_")[0]
     print(outprefix)
     chrom_dict = dict(i.strip().split() for i in open(chrom_list) if i.strip())

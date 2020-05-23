@@ -31,7 +31,7 @@ from TDGP.apps.base import ActionDispatcher
 from TDGP.apps.utilities import isCooler
 from TDGP.formats.bedGraph import BedGraph
 from TDGP.formats.hicmatrix import cool2matrix
-from TDGP.graph.ploty import change_width
+from TDGP.graphics.ploty import change_width
 debug()
 log = logging.getLogger(__name__)
 log.setLevel(logging.DEBUG)
@@ -49,6 +49,7 @@ def main():
             ('plotSwitchPie', 'plot two samples switch type pie picture'),
             ('plotBoxPerChrom', 'plot boxplot of some data per chromosomes'),
             ('plotBoxMultiSamples', 'plot boxplot of some data per samples on one chromosome'),
+            ('quickPlot', 'quick plot A/B compartments to show pc1 and gene density'),
             ('getSyntenyGenePca', "get the synteny gene pairs pca value"),
             ('annotateSwitchType', "annotate swithch type for synteny gene pairs"),
             ('annotateType', 'annotate the compartment type for a pca bg file'),
@@ -1670,5 +1671,76 @@ def plotBoxMultiSamples(args):
             dpi=300, bbox_inches='tight')
 
 
+def quickPlot(args):
+    """
+    %(prog)s <eigen1.bg> [gene.density.bg] [Options]
+        to quick plot picture to visualized A/B compartments
+
+    """
+
+    p = argparse.ArgumentParser(prog=quickPlot.__name__,
+                            description=quickPlot.__doc__,
+                            conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('eigen1', help='bg file of eigen1')
+    pReq.add_argument('chromsizes', help='chromosome sizes file')
+
+    pOpt.add_argument('-g', '--gene', 
+            help='gene density bg file')
+    pOpt.add_argument('-o', '--outdir', default='quickPlot',
+            help='outdir [default: %(default)s]')
+    pOpt.add_argument('--pdf', default=False, action='store_true',
+            help='if output pdf format [default: %(default)s]')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    
+    args = p.parse_args(args)
+    
+    import configparser
+    cf = configparser.ConfigParser()
+    
+    cf.add_section("ab")
+    cf.set('ab', 'file', args.eigen1)
+    cf.set('ab', 'color', '#BB4853')
+    cf.set('ab', 'negative color', '#209093')
+    cf.set('ab', 'title', 'A/B Compartments')
+    cf.set('ab', 'fontsize', '14')
+    cf.set('ab', 'height', '3')
+    cf.set('ab', 'max_value', '0.15')
+    cf.set('ab', 'min_value', '-0.15')
+
+    if args.gene:
+        cf.add_section('spacer')
+        cf.add_section('gene')
+        cf.set('gene', 'file', args.gene)
+        cf.set('gene', 'color', '#D33B00')
+        cf.set('gene', 'title', 'Gene Density')
+        cf.set('gene', 'height', '3')
+        cf.set('gene', 'fontsize', '14')
+        cf.set('gene', 'max_value', '30')
+
+    cf.add_section('x-axis')
+
+    with open('quickplot.ini', 'w+') as f:
+        cf.write(f)
+    
+    chromsizes = dict(i.strip().split() for 
+                    i in open(args.chromsizes) 
+                    if i.strip())
+    plot_cmd_formatter = 'pyGenomeTracks --tracks quickplot.ini '
+    plot_cmd_formatter += '-o {1}/{0}.{2} --region {0}'
+
+    if not op.exists(args.outdir):
+        os.makedirs(args.outdir)
+
+    fmt = 'pdf' if args.pdf else 'png'
+    for chrom in chromsizes:
+        start = 1
+        end = chromsizes[chrom]
+        region = '{}:{}-{}'.format(chrom, start, end)
+        print(plot_cmd_formatter.format(region, args.outdir, fmt))
+
+    
 if __name__ == "__main__":
     main()

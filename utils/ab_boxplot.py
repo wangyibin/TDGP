@@ -156,7 +156,7 @@ def plot(bgfile, scale=100, title="Gene Density", outfile='ab_boxplot.pdf', chro
             xlabel = r"{} ({})".format(xlabel, chrom)
             a_data = ab_data[(ab_data[0] == chrom) & (ab_data[3] > 0)]
             b_data = ab_data[(ab_data[0] == chrom) & (ab_data[3] < 0)]
-            ab_boxplot(a_data,b_data, chrom, ax, scale, xlabel, ylabel)
+            ab_boxplot(a_data, b_data, chrom, ax, scale, xlabel, ylabel)
 
     plt.suptitle(title, **suptitle_props)
     plt.savefig(outfile, dpi=300,bbox_inches='tight' )

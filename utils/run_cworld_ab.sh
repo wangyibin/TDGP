@@ -4,15 +4,15 @@
 bed=$1
 matrix=$2
 genome=$3
-
-if [[ -z $bed || -z $matrix || -z $genome ]];then
+chromsizes=$4
+if [[ -z $bed || -z $matrix || -z $genome || -z $chromsizes ]];then
         echo
-        echo "Usage: `basename $0` rice_100000_abs.bed rice_100000_iced.matrix rice"
+        echo "Usage: `basename $0` rice_100000_abs.bed rice_100000_iced.matrix rice chrom.sizes"
         echo
         exit;
 fi
 
-cworld_dir=/public1/home/stu_wangyibin/software/cworld-dekker/scripts/util/geneDensity/
+
 if [ ! -f ${cworld_dir}/${genome}.refseq.txt ];then
         echo "No such file of $genome.refseq.txt in $cworld_dif"
         echo "to execute command of :"
@@ -30,7 +30,7 @@ fi
 echo "starting sparse to dense"
 sparseToDense.py -b $bed $matrix -o ${bed%%_abs.bed}.dense.matrix  -c
 echo "staring create cworld header"
-python /public1/home/stu_wangyibin/code/TDGP/utils/cworld_header.py $bed $genome -c
+cworld_header.py $bed $genome -c
 
 name=${bed%%_abs.bed}
 for dense in *${name}*dense.matrix; do
@@ -41,6 +41,10 @@ for matrix in *${name}*addedHeaders.matrix.gz;do
         echo ${matrix}
 done | parallel -j 12 "matrix2compartment.pl -i {}"
 
-cat *${name}*addedHeaders.zScore.eigen1.bedGraph |sort -V |grep -v track > ${matrix%%matrix}all_eigen1.bg
+cat *${name}*addedHeaders.zScore.eigen1.bedGraph |sort -V |grep -v track > ${matrix%%.matrix}_all_eigen1.bg
 
-bedtools intersect -a ${matrix%%matrix}all_eigen1.bg -b $cworld_dir/${genome}.refseq.txt -c > ${matrix%%.matrix}_all_eigen1_gene_density.bg
+
+bedtools intersect -a ${matrix%%.matrix}_all_eigen1.bg -b $cworld_dir/${genome}.refseq.txt -c > ${matrix%%.matrix}_all_eigen1_gene_density.bg
+cut -f 1-3,5 ${matrix%%.matrix}_all_eigen1_gene_density.bg > ${matrix%%.matrix}_gene_density.bg
+
+python -m TDGP.analysis.ab quickPlot ${matrix%%.matrix}_all_eigen1.bg $chromsizes -g ${matrix%%.matrix}_gene_density.bg | parallel -j 12 {}

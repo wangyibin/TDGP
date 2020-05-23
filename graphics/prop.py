@@ -53,3 +53,4 @@ def clamp(x):
 def rgb2hex(x):
     r, g, b = x
     return "#{0:02x}{1:02x}{2:02x}".format(clamp(r), clamp(g), clamp(b))
+

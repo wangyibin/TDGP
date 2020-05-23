@@ -37,12 +37,12 @@ hicpro2cool() {
                 echo
                 return 1
         fi
-
-        conda run -n hicexplorer hicConvertFormat -m $matrix --bedFileHicpro $bedfile --inputFormat hicpro --outputFormat cool -o ${matrix%%.matrix}.cool
+        outname=`basename ${matrix%%.matrix}`
+        conda run -n hicexplorer hicConvertFormat -m $matrix --bedFileHicpro $bedfile --inputFormat hicpro --outputFormat cool -o ${outname}.cool
 }
 
 
-qssh() {
+ qssh() {
         
         ## qrlogin node
 
