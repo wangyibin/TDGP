@@ -27,8 +27,8 @@ def main(coolfile, chrom_list, outprefix=None, bgfile=None, cmap='RdYlBu_r'):
     suffix = ""
     if bgfile:
         suffix = "--bigwig {}".format(bgfile)
-    cmd_wg = "conda run -n hicexplorer hicPlotMatrix --matrix {} -o {}_wg_heatmap.pdf --log1p --dpi 300 --title 'Hi-C Heatmap for Whole Genome' --chromosomeOrder {}  --clearMaskedBins --colorMap {} {}".format(coolfile, outprefix, chrom_order, cmap, suffix)
-    cmd_per =  "conda run -n hicexplorer hicPlotMatrix --matrix {} -o {}_per_heatmap.pdf --log1p --dpi 300 --title 'Hi-C Heatmap'  --perChromosome --chromosomeOrder {}  --clearMaskedBins --colorMap {} {}".format(coolfile, outprefix, chrom_order,cmap, suffix)
+    cmd_wg = "hicPlotMatrix --matrix {} -o {}_wg_heatmap.pdf --log1p --dpi 300 --title 'Hi-C Heatmap for Whole Genome' --chromosomeOrder {}  --clearMaskedBins --colorMap {} {}".format(coolfile, outprefix, chrom_order, cmap, suffix)
+    cmd_per =  "hicPlotMatrix --matrix {} -o {}_per_heatmap.pdf --log1p --dpi 300 --title 'Hi-C Heatmap'  --perChromosome --chromosomeOrder {}  --clearMaskedBins --colorMap {} {}".format(coolfile, outprefix, chrom_order,cmap, suffix)
     print(cmd_wg)
     print(cmd_per)
     os.system(cmd_wg)
