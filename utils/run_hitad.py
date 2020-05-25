@@ -94,5 +94,6 @@ with open('run_{}.sh'.format(matrix.replace('.matrix', '')), 'w') as f_out:
     f_out.write(header + out_prefix + out + hitad_command)
 
 if opts.no_qsub:
+    os.system('sed -i "s/cd $PBS_O_WORKDIR//" {}'.format(matrix.replace('.matrix', '')))
     os.system('qsub {}'.format('run_{}.sh'.format(matrix.replace('.matrix', ''))))
 
