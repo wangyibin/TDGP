@@ -68,7 +68,7 @@ bed=$(basename $bed)
 resolution=`echo $matrix | perl -lne '/_(\d+)[_.]/ && print $1'`
 
 echo "Convert matrix to cool..."
-/public1/home/stu_wangyibin/software/anaconda2/envs/hicexplorer/bin/hicConvertFormat -m $matrix_path/$matrix --bedFileHicpro $bed_path/$bed --inputFormat hicpro --outputFormat cool -o ${matrix%%.matrix}.cool
+hicConvertFormat -m $matrix_path/$matrix --bedFileHicpro $bed_path/$bed --inputFormat hicpro --outputFormat cool -o ${matrix%%.matrix}.cool
 echo "Convert Done"
 rm ${matrix%%.matrix}.ini
 echo "res:$resolution
