@@ -38,7 +38,7 @@ hicpro2cool() {
                 return 1
         fi
         outname=`basename ${matrix%%.matrix}`
-        conda run -n hicexplorer hicConvertFormat -m $matrix --bedFileHicpro $bedfile --inputFormat hicpro --outputFormat cool -o ${outname}.cool
+        hicConvertFormat -m $matrix --bedFileHicpro $bedfile --inputFormat hicpro --outputFormat cool -o ${outname}.cool
 }
 
 

@@ -13,5 +13,5 @@ fi
 
 outname=`basename ${matrix%%.matrix}`
 echo $outname
-conda run -n hicexplorer hicConvertFormat -m $matrix --bedFileHicpro $bedfile --inputFormat hicpro --outputFormat cool -o $outname.cool
+hicConvertFormat -m $matrix --bedFileHicpro $bedfile --inputFormat hicpro --outputFormat cool -o $outname.cool
 

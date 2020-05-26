@@ -1,6 +1,9 @@
 cooler
+joblib
 numpy
 matplotlib
 pandas
 pyranges
 seaborn
+pyGenomeTracks
+deeptools

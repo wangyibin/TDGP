@@ -9,10 +9,18 @@ import logging
 import sys
 
 from multiprocessing import Pool, Process, cpu_count
-from TDGP.apps.base import debug
+from TDGP.apps.base import debug,listify
 
 
 debug()
+
+def main():
+
+    actions = (
+            ("parafly", ""),
+        )
+    p = ActionDispatcher(actions)
+    p.dispatch(globals())
 
 
 class Jobs(object):
@@ -44,15 +52,21 @@ def parallel(target, args, threads=cpu_count):
 class CMD(object):
     """
     Linux command execute object
+
+    Params:
+    -------
     """
 
-    def __init__(self, cmds):
-        self.cmds = cmds
+    def __init__(self, cmds, threads=4):
+
+        self.cmds = listify(cmds)
+        self.threads = threads
         self.run()
     
-    def run(self, threads=4):
-        p = Parallel(os.system, self.cmds, threads)
+    def run(self):
+        p = Parallel(os.system, self.cmds, self.threads)
         p.run()
+
 
 
 PBS_HEADER = """#!/bin/bash

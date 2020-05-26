@@ -9,13 +9,43 @@
 
 from __future__ import print_function
 
+
+import argparse
 import os
 import os.path as op
 import sys
 
+from TDGP.apps.grid import CMD
 
 
-def main(coolfile, chrom_list, outprefix=None, bgfile=None, cmap='RdYlBu_r'):
+def main(args):
+    p = p=argparse.ArgumentParser(prog=main.__name__,
+                        description=main.__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('coolfile', help='coolfile')
+    pReq.add_argument('chromlist', help='chrom list')
+    pOpt.add_argument('-b', '--bigwig', nargs="*", default=None,
+            help='bigwig file ')
+    pOpt.add_argument('-o', '--outprefix', default=None,
+            help='outprefix of heatmap [default: cool_outprefix')
+    pOpt.add_argument('-c', '--cmap', default='RdYlBu_r',
+            help='colormap of heatmap [default: %(default)s]')
+    pOpt.add_argument('-t', '--threads', default=4, type=int,
+            help='threads of programs')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    
+    args = p.parse_args(args)
+
+    coolfile = args.coolfile 
+    chrom_list = args.chromlist
+    outprefix = args.outprefix
+    bgfile = args.bigwig
+    threads = args.threads
+    cmap = args.cmap
+    
     if op.exists(chrom_list):
         chrom_list = [ i.strip().split()[0] for i in open(chrom_list)
                 if i.strip()]
@@ -29,25 +59,15 @@ def main(coolfile, chrom_list, outprefix=None, bgfile=None, cmap='RdYlBu_r'):
         suffix = "--bigwig {}".format(bgfile)
     cmd_wg = "hicPlotMatrix --matrix {} -o {}_wg_heatmap.pdf --log1p --dpi 300 --title 'Hi-C Heatmap for Whole Genome' --chromosomeOrder {}  --clearMaskedBins --colorMap {} {}".format(coolfile, outprefix, chrom_order, cmap, suffix)
     cmd_per = "hicPlotMatrix --matrix {} -o {}_per_heatmap.pdf --log1p --dpi 300 --title 'Hi-C Heatmap'  --perChromosome --chromosomeOrder {}  --clearMaskedBins --colorMap {} {}".format(coolfile, outprefix, chrom_order,cmap, suffix)
-    print(cmd_wg)
-    print(cmd_per)
-    os.system(cmd_wg)
-    os.system(cmd_per)
-
-
-if __name__ == "__main__":
-    from optparse import OptionParser
-
-    p = OptionParser(__doc__)
     
-    p.add_option("-o", "--outprefix", default=None, 
-            help="the outprefix of file [default: coolfile_prefix]")
-    p.add_option("--bigwig", default=None,
-            help="the bigwig file of ab compartments")
-    p.add_option("--cmap", default='RdYlBu_r', 
-            help="colormap of heatmap [default: %default]")
-    opts, args = p.parse_args()
-    if len(args) != 2:
-        sys.exit(p.print_help())
-    coolfile, chrom_list = args
-    main(coolfile, chrom_list, opts.outprefix, opts.bigwig, opts.cmap)
+    cmds = []
+    cmds.append(cmd_wg)
+    cmds.append(cmd_per)
+    
+    for chrom in chrom_list:
+        cmd_single = "hicPlotMatrix --matrix {0} -o {1}_{2}_heatmap.pdf --log1p --dpi 300 --title 'Hi-C Heatmap' --region {2} --clearMaskedBins --colorMap {3} {4}".format(coolfile, outprefix, chrom, cmap, suffix)
+        cmds.append(cmd_single)
+
+    CMD(cmds, threads)
+if __name__ == "__main__":
+    main(sys.argv[1:])
