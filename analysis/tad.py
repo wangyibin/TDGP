@@ -1082,11 +1082,11 @@ def quickPlotTAD(args):
     cf.add_section('x-axis')
     cf.set('x-axis', 'where', 'bottom')
 
-    with open('quickPlotTAD.tad.ini', 'w+') as f:
+    with open('{}/quickPlotTAD.tad.ini'.format(args.outdir), 'w+') as f:
         cf.write(f)
     
     chrom_windows_db = makeChromWindows(args.chrom_size, args.window)
-    plot_cmd_formatter = "conda run -n hicexplorer pyGenomeTracks --tracks quickPlotTAD.tad.ini -o {1}/{0}.{2} --region {0}"
+    plot_cmd_formatter = "pyGenomeTracks --tracks {3}/quickPlotTAD.tad.ini -o {3}/{1}/{0}.{2} --region {0}"
     
     ext = 'pdf' if args.pdf else 'png'
     if not op.exists(args.outdir):

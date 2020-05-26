@@ -11,12 +11,15 @@
 from __future__ import print_function
 
 import sys
+import os.path as op
+import os
 
 from collections import defaultdict
 
 
-def bed2header(bedfile, genome, perchr=False):
+def bed2header(bedfile, genome, outdir="./", perchr=False):
     out_dict = defaultdict(lambda :[])
+    name = op.basename(bedfile)
     with open(bedfile) as fp:
         for line in fp:
             line_list = line.strip().split()
@@ -29,7 +32,7 @@ def bed2header(bedfile, genome, perchr=False):
 
         if perchr:
             for chrn in out_dict:
-                with open('{}_{}.header'.format(chrn, bedfile), 'w') as out:
+                with open('{}/{}_{}.header'.format(outdir, chrn, name), 'w') as out:
                     out.write("\n".join(map(lambda x: "|".join(x),
                                                  out_dict[chrn])))
 
@@ -37,6 +40,8 @@ def bed2header(bedfile, genome, perchr=False):
 if __name__ == "__main__":
     from optparse import OptionParser
     p = OptionParser(__doc__)
+    p.add_option('-o', '--outdir', dest='outdir', default='./',
+                help='output directory of results [default: %default]')
     p.add_option("-c", "--perchr", dest="perchr", action='store_true',
                  default=False, help='If specified the output are '
                                      'written per chromosome')
@@ -45,4 +50,4 @@ if __name__ == "__main__":
         sys.exit(p.print_help())
 
     bedfile, genome = args
-    bed2header(bedfile, genome, opts.perchr)
+    bed2header(bedfile, genome, opts.outdir, opts.perchr)

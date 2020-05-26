@@ -26,7 +26,7 @@ linkHiCProMatrix(){
 }
 
 
-hicpro2cool() {
+hicpro2cool1() {
         ## Convert hicpro to cool format use hicexplorer
         bedfile=$1
         matrix=$2

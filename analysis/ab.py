@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # -*- coding:utf-8 -*-
 
 """
@@ -1722,13 +1722,13 @@ def quickPlot(args):
 
     cf.add_section('x-axis')
 
-    with open('quickplot.ini', 'w+') as f:
+    with open('{}/quickplot.ini'.format(op.dirname(args.outdir)), 'w+') as f:
         cf.write(f)
     
     chromsizes = dict(i.strip().split() for 
                     i in open(args.chromsizes) 
                     if i.strip())
-    plot_cmd_formatter = 'pyGenomeTracks --tracks quickplot.ini '
+    plot_cmd_formatter = 'pyGenomeTracks --tracks {}/quickplot.ini '.format(op.dirname(args.outdir))
     plot_cmd_formatter += '-o {1}/{0}.{2} --region {0}'
 
     if not op.exists(args.outdir):
