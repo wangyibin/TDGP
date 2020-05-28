@@ -108,7 +108,7 @@ def read_bg(bgfile):
     return ab_data
 
 
-def plot(bgfile, scale=100, title="Gene Density", outfile='ab_boxplot.pdf', chrom_list='all', column_num=4, 
+def plot(bgfile, scale=100, title="Gene Density", outfile=None, chrom_list='all', column_num=4, 
         draw_per_chrom=False, exclude=[], xlabel='', ylabel='',
         sort_func='lambda x: int(x[3:])'):
     
@@ -119,6 +119,7 @@ def plot(bgfile, scale=100, title="Gene Density", outfile='ab_boxplot.pdf', chro
     
     ab_data = read_bg(bgfile)
     
+    outfile = outfile if outfile else bgfile.rsplit('.', 1)[0] + ".pdf"
     
     if not isinstance(exclude, list):
         exclude = exclude.split(',')
@@ -173,7 +174,7 @@ if __name__ == "__main__":
     
     p.add_option('-t', '--title', default="",
             help='the title of picture')
-    p.add_option('-o', '--outfile', default='ab_boxplot.pdf', 
+    p.add_option('-o', '--outfile', default=None, 
                     help='outfile of plot [default: %default]')
     p.add_option('--chrom_list', default='all',
             help='list of chromosome which plot, split by comma'
@@ -186,7 +187,7 @@ if __name__ == "__main__":
     p.add_option('--exclude', default=[],
             help='list of chromosome which exclude, split by comma'
             '[default: %default]')
-    p.add_option('--scale', default=100, type=int, 
+    p.add_option('--scale', default=1, type=int, 
             help='the scale of yticks [default: %default]')
     p.add_option('--xlabel', default='', 
             help='xlabel of genome wide picture [default: none]')

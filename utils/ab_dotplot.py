@@ -31,8 +31,8 @@ def plot(ax, df,
         xlabel='PCA1', 
         ylabel='Count',
         scale=1,
-        yMin=0,
-        yMax=0.6
+        yMin=None,
+        yMax=None
         ):
     plt.rc('font', size=14)
     df['value'] = df['value'] / scale
@@ -43,9 +43,11 @@ def plot(ax, df,
     
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
-    ax.set_ylim(yMin, yMax)
+    if yMax or yMin:
+        ax.set_ylim(yMin, yMax)
     plt.legend()
     plt.savefig(output, bbox_inches='tight')
+    plt.savefig(output.rsplit('.')[0] + '.png', bbox_inches='tight')
 
 def main(args):
     """

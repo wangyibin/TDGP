@@ -7,10 +7,16 @@ genome=$3
 chromsizes=$4
 outdir=$5
 thread=$6
+TE_DATA=$7
+
+resolution=`basename $matrix | perl -lne '/_(\d+)[_.]/ && print $1'`
+RES_FILE_NAME=`basename ${bed} | sed 's/_abs.bed//g' | sed "s/_${resulotion}//g"`
+name=`basename ${bed} | sed 's/_abs.bed//g'`
+prefix=`basename ${matrix} | sed 's/.matrix//g'`
 if [[ -z $bed || -z $matrix || -z $genome || -z $chromsizes ]];then
         echo
         echo "Usage: `basename $0` rice_100000_abs.bed rice_100000_iced.matrix rice chrom.sizes"
-        echo
+        echo "Usage: `basename $0` rice_100000_abs.bed rice_100000_iced.matrix rice chrom.sizes outdir thread TE_DATA"
         exit;
 fi
 
@@ -21,6 +27,7 @@ fi
 if [[ -z $thread ]]; then
         thread=12
 fi
+
 
 if [ ! -f ${cworld_dir}/${genome}.refseq.txt ];then
         echo "No such file of $genome.refseq.txt in $cworld_dir"
@@ -35,29 +42,70 @@ if [ ! -f ${cworld_dir}/${genome}.refseq.txt ];then
 fi
 
 
+TE_analysis(){
+        local te_data=$1
+        echo "Starting analysis the TE density"
+        #bedtools makewindows -g ${chromsizes} -w ${bsize} > ${outdir}/${RES_FILE_NAME}_${bsize}.window && \
+        #bedtools intersect -a ${outdir}/${RES_FILE_NAME}_${bsize}.window -b ${te_data} -c > ${outdir}/${RES_FILE_NAME}_${bsize}_TE.bg
+        bedtools intersect -a ${outdir}/${prefix}_all_eigen1.bg -b ${te_data} -c > ${outdir}/${prefix}_all_eigen1_TE_density.bg && \
+        cut -f 1-3,5 ${outdir}/${prefix}_all_eigen1_TE_density.bg > ${outdir}/${prefix}_TE_density.bg && \
+        bedGraphToBigWig ${outdir}/${prefix}_TE_density.bg ${chromsizes} ${outdir}/${prefix}_TE_density.bw
+        ab_boxplot.py ${outdir}/${prefix}_all_eigen1_TE_density.bg --xlabel 'TE' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_TE_density.pdf
+        ab_dotplot.py ${outdir}/${prefix}_all_eigen1_gene_density.bg --xlabel 'Gene' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_TE_density_dotplot.pdf
+        echo "Done"
+}
+
+GENE_analysis(){
+        echo "Start analysis the gene density"
+        bedtools intersect -a ${outdir}/${prefix}_all_eigen1.bg -b ${cworld_dir}/${genome}.refseq.txt -c > ${outdir}/${prefix}_all_eigen1_gene_density.bg && \
+        cut -f 1-3,5 ${outdir}/${prefix}_all_eigen1_gene_density.bg > ${outdir}/${prefix}_gene_density.bg && \
+        bedGraphToBigWig ${outdir}/${prefix}_gene_density.bg ${chromsizes} ${outdir}/${prefix}_gene_density.bw
+        ab_boxplot.py ${outdir}/${prefix}_all_eigen1_gene_density.bg --xlabel 'Gene' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_gene_density.pdf &
+        ab_dotplot.py ${outdir}/${prefix}_all_eigen1_gene_density.bg --xlabel 'Gene' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_gene_density_dotplot.pdf
+        echo "Done"
+}
 
 echo "starting sparse to dense"
 
-name=`basename ${bed} | sed 's/_abs.bed//g'`
-prefix=`basename ${matrix} | sed 's/.matrix//g'`
+
 sparseToDense.py -b $bed $matrix -o ${name}.dense.matrix  -c
 
 
-mv *${name}.dense.matrix ${outdir}
+if [[ ${outdir} != "./" ]]; then mv *${name}.dense.matrix ${outdir}; fi
 echo "staring create cworld header"
 cworld_header.py $bed $genome -o ${outdir} -c
+echo "created header"
 
-
+echo "starting analysis compartments"
 for dense in ${outdir}/*${name}*dense.matrix; do
         echo ${dense%%.dense.matrix}
-done | parallel -j ${thread} "addMatrixHeaders.pl -i {}.dense.matrix --xhf {}_abs.bed.header --yhf {}_abs.bed.header -v -o {}" && \
-for matrix in ${outdir}/*${name}*addedHeaders.matrix.gz;do
-        echo ${matrix}
-done | parallel -j ${thread} "matrix2compartment.pl -i {}" && \
-mv *${name}.addedHeaders* ${outdir} && \
-cat ${outdir}/*${name}*addedHeaders.zScore.eigen1.bedGraph |sort -V |grep -v track > ${outdir}/${name}_all_eigen1.bg && \
-bedtools intersect -a ${outdir}/${name}_all_eigen1.bg -b ${cworld_dir}/${genome}.refseq.txt -c > ${outdir}/${prefix}_all_eigen1_gene_density.bg && \
-cut -f 1-3,5 ${outdir}/${prefix}_all_eigen1_gene_density.bg > ${outdir}/${prefix}_gene_density.bg && \
-ab_boxplot.py ${outdir}/${prefix}_all_eigen1_gene_density.bg --xlabel 'Gene' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_gene_density.pdf &
-python -m TDGP.analysis.ab quickPlot ${outdir}/${name}_all_eigen1.bg $chromsizes -g ${outdir}/${name}_gene_density.bg -o ${outdir}/quickPlot | parallel -j ${N_CPU} {} &
+done | parallel -j ${thread} "addMatrixHeaders.pl -i {}.dense.matrix --xhf {}_abs.bed.header --yhf {}_abs.bed.header -v -o {}" 
+for mtrx in ${outdir}/*${name}*addedHeaders.matrix.gz;do
+        echo ${mtrx}
+done | parallel -j ${thread} "matrix2compartment.pl -i {}"
+
+if [[ ${outdir} != "./" ]]; then mv *${name}.addedHeaders* ${outdir}; fi 
+
+cat ${outdir}/*${name}*addedHeaders.zScore.eigen1.bedGraph |sort -V |grep -v track > ${outdir}/${prefix}_all_eigen1.bg && \
+bedGraphToBigWig ${outdir}/${prefix}_all_eigen1.bg ${chromsizes} ${outdir}/${prefix}_all_eigen1.bw
+
+# moving cworld intermediate results
+mkdir -p ${outdir}/cworld_results
+mv ${outdir}/*${name}*addedHeaders.* ${outdir}/cworld_results
+
+echo "Done"
+
+
+GENE_analysis &
+
+if [[ -e ${TE_DATA} ]]; then
+TE_analysis ${TE_DATA} &  
+TE_suffix="--TE ${outdir}/${prefix}_TE_density.bg"   
+fi
+wait
+
+
+
+python -m TDGP.analysis.ab quickPlot ${outdir}/${prefix}_all_eigen1.bg $chromsizes -g ${outdir}/${prefix}_all_eigen1_gene_density.bg  ${TE_suffix} -o ${outdir}/quickPlot | parallel -j ${thread} {} &
+
 wait

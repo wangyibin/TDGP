@@ -16,6 +16,7 @@ import numpy as np
 import pandas as pd
 
 import cooler
+import math
 import scipy
 import seaborn as sns
 import matplotlib as mpl
@@ -625,8 +626,15 @@ def plot_two_species_ab_pie(tgy_df, jgy_df, out):
 ## outside command ##
 def plotLineRegress(args):
     """
-    %(prog)s a.pca1 b.pca1 [Options]
-        To plot lineregress of two species' pca1 eigenvector
+    %(prog)s a.pca1 b.pca1 [Options]\n
+        To plot lineregress of two species' pca1 eigenvector\n
+    
+    Examples:\n
+        %(prog)s a.pca1 b.pca1 --xlabel a --ylabel b\n
+        - plotting per chromosome\n
+        %(prog)s a.bg b.bg --xlabel a --ylabel b --perchrom\n
+        - plotting marked color by chromosomes\n
+        %(prog)s a.bg b.bg --xlabel a --ylabel b --withColor\n
     """
     p = argparse.ArgumentParser(prog=plotLineRegress.__name__,
                         description=plotLineRegress.__doc__, 
@@ -641,19 +649,137 @@ def plotLineRegress(args):
             help='the ylabel of picture [default: %(default)s]' )
     pOpt.add_argument('-o', '--out', default=None,
             help='output file [default: xlabel-ylabel_ab_lineregress.pdf]')
+    pOpt.add_argument('--perchrom', default=False, action='store_true',
+            help='if plot per chromosome [default: %(default)s]')
+    pOpt.add_argument('--withColor', default=False, action='store_true',
+            help='if plot color for scatter by chromosome [default: %(default)s]')
     pOpt.add_argument('-h', '--help', action='help', 
             help='show help message and exit.')
 
     args = p.parse_args(args)
+    from TDGP.graphics.ploty import plotLineRegress as plr
+    def checkFileType(infile):
+        with open(infile) as fp:
+            for line in fp:
+                if len(line.strip().split()) == 1:
+                    return 'list'
+                elif len(line.strip().split()) == 4:
+                    return 'bedGraph'
+                else:
+                    return 
+                break
+    def import_pca1(bgfile):
+        df = pd.read_csv(bgfile, sep='\t', 
+                        header=None, index_col=0, 
+                        names=['chrom', 'start', 'end', 'pca1'])
+        return df
 
-    ABC = ABComparisionSpecies()
-    check_file_exists(args.a)
-    check_file_exists(args.b)
-    a = [float(i.strip()) for i in open(args.a)]
-    b = [float(i.strip()) for i in open(args.b)]
-    ABC.plotLineRegress(a, b, args.out, xlabel=args.xlabel, 
-            ylabel=args.ylabel)
+    def trim_axs(axs, N):
+        """
+        little helper to message the axs list to have correct length...
+        """
+        axs = axs.flat
+        for ax in axs[N:]:
+            ax.remove()
 
+        return axs[:N]
+
+    def plotPerChrom(xdf, ydf, out=None, xlabel='species1', 
+                        ylabel='species2', ncols=4):
+        if not out:
+            out = "{}-{}_ab_lineregress_perchrom".format(xlabel, ylabel)
+        chrom_list = sorted(set(xdf.index))
+        nrows = math.ceil(len(chrom_list) / ncols)
+        fig, axes = plt.subplots(int(math.ceil(len(chrom_list)*1.0/ncols)),
+                        ncols, figsize=(ncols*4 + 3,
+                        int(math.ceil(len(chrom_list)*1.0/ncols))*4 + 1), 
+                        constrained_layout=True)
+        axes = trim_axs(axes, len(chrom_list))
+        for ax, chrom in zip(axes, chrom_list):
+            plr(ax, xdf.loc[chrom].pca1, ydf.loc[chrom].pca1, chrom, chrom)
+        fig.text(0.5, -0.04, xlabel, ha='center', va='center', 
+                    fontsize=16)
+        fig.text(-0.02, 0.5, ylabel, ha='center', va='center', 
+                    rotation='vertical', fontsize=16)
+        plt.savefig(out.replace('.pdf', '') + '.png', 
+                        dpi=300, bbox_inches='tight')
+        plt.savefig(out.replace('.png', '') + '.pdf', 
+                        dpi=300, bbox_inches='tight')
+
+    def plotAll(xdf, ydf, out=None, xlabel='species1', ylabel='species2'):
+        if not out:
+            out = "{}-{}_ab_lineregress_all".format(xlabel, ylabel)
+        fig, ax = plt.subplots(figsize=(5, 5))
+        ax = plr(ax, xdf.pca1, ydf.pca1, xlabel, ylabel)
+        plt.savefig(out.replace('.pdf', '') + '.png', 
+                        dpi=300, bbox_inches='tight')
+        plt.savefig(out.replace('.png', '') + '.pdf', 
+                        dpi=300, bbox_inches='tight')
+
+    def plotWithColor(xdf, ydf, 
+                    out=None, 
+                    onlySwitch=True, 
+                    xlabel='species1', 
+                    ylabel='species2'):
+        if not out:
+            out = "{}-{}_ab_lineregress_withColor".format(xlabel, ylabel)
+        fig, ax = plt.subplots(figsize=(5, 5))
+        chrom_list = sorted(set(xdf.index))
+        df = pd.concat([xdf, ydf], axis=1)
+        df.columns = ['start1', 'end1', 'pca11', 'start2', 'end2', 'pca12']
+        for chrom in chrom_list:
+            if not onlySwitch:
+                ax.scatter(xdf.loc[chrom].pca1, ydf.loc[chrom].pca1, s=2, label=chrom)
+            else:
+                ax.scatter(xdf.loc[chrom].pca1, ydf.loc[chrom].pca1, s=2, color='#209093')
+                tmp_df = df.loc[chrom]
+                a2b = tmp_df.loc[(tmp_df.pca11 > 0 ) & (tmp_df.pca12 < 0)]
+                b2a = tmp_df.loc[(tmp_df.pca11 < 0 ) & (tmp_df.pca12 > 0)]
+                x = pd.concat([a2b.pca11, b2a.pca11])
+                y = pd.concat([a2b.pca12, b2a.pca12])
+                ax.scatter(x, y, s=2, label="{} ({})".format(chrom, len(x)))
+            leg = ax.legend(bbox_to_anchor=(1, 0.5))
+
+        ax = plr(ax, xdf.pca1, ydf.pca1, 
+                            xlabel=xlabel, ylabel=ylabel, scatter=False)
+        ax.add_artist(leg)
+        plt.savefig(out.replace('.pdf', '') + '.png', 
+                        dpi=300, bbox_inches='tight')
+        plt.savefig(out.replace('.png', '') + '.pdf', 
+                        dpi=300, bbox_inches='tight')
+
+    if checkFileType(args.a) == 'list' and checkFileType(args.b) == 'list':
+               
+        ABC = ABComparisionSpecies()
+        check_file_exists(args.a)
+        check_file_exists(args.b)
+        a = [float(i.strip()) for i in open(args.a)]
+        b = [float(i.strip()) for i in open(args.b)]
+        ABC.plotLineRegress(a, b, args.out, xlabel=args.xlabel, 
+                ylabel=args.ylabel)
+    elif checkFileType(args.a) == 'bedGraph' and checkFileType(args.b) == 'bedGraph':
+        xdf = import_pca1(args.a)
+        ydf = import_pca1(args.b)
+        if args.perchrom:
+            plotPerChrom(xdf, ydf, args.out, 
+                        xlabel=args.xlabel, 
+                        ylabel=args.ylabel)
+        else:
+            if args.withColor:
+                plotWithColor(xdf, ydf, args.out, 
+                        onlySwitch=True, 
+                        xlabel=args.xlabel, 
+                        ylabel=args.ylabel)
+            else:
+                plotAll(xdf, ydf, args.out, 
+                        xlabel=args.xlabel, 
+                        ylabel=args.ylabel)
+            
+    else:
+        logging.error('incorrect of input file, only support for `list` and `bedGraph`')
+        sys.exit()
+
+    
 
 def getSyntenyGenePca(args):
     """
@@ -1688,6 +1814,7 @@ def quickPlot(args):
 
     pOpt.add_argument('-g', '--gene', 
             help='gene density bg file')
+    pOpt.add_argument('--TE', help='bg file of TE density')
     pOpt.add_argument('-o', '--outdir', default='quickPlot',
             help='outdir [default: %(default)s]')
     pOpt.add_argument('--pdf', default=False, action='store_true',
@@ -1696,7 +1823,7 @@ def quickPlot(args):
             help='show help message and exit.')
     
     args = p.parse_args(args)
-    
+    outdir=op.abspath(args.outdir)
     import configparser
     cf = configparser.ConfigParser()
     
@@ -1719,20 +1846,33 @@ def quickPlot(args):
         cf.set('gene', 'height', '3')
         cf.set('gene', 'fontsize', '14')
         cf.set('gene', 'max_value', '30')
-
+    
+    if args.TE:
+        cf.add_section('spacerTE')
+        cf.add_section('te')
+        cf.set('te', 'file', args.TE)
+        cf.set('te', 'color', '#00426D')
+        cf.set('te', 'title', 'TE Density')
+        cf.set('te', 'height', '3')
+        cf.set('te', 'fontsize', '14')
+        #cf.set('gene', 'max_value', '1500')
+    
+    
     cf.add_section('x-axis')
-
-    with open('{}/quickplot.ini'.format(op.dirname(args.outdir)), 'w+') as f:
+    if not op.exists(outdir):
+        os.makedirs(outdir)
+    with open('{}/quickplot.ini'.format(outdir), 'w+') as f:
         cf.write(f)
     
+    os.system("sed -i 's/spacerTE/spacer/g' {}/quickplot.ini".format(outdir))
+
     chromsizes = dict(i.strip().split() for 
                     i in open(args.chromsizes) 
                     if i.strip())
-    plot_cmd_formatter = 'pyGenomeTracks --tracks {}/quickplot.ini '.format(op.dirname(args.outdir))
+    plot_cmd_formatter = 'pyGenomeTracks --tracks {}/quickplot.ini '.format(outdir)
     plot_cmd_formatter += '-o {1}/{0}.{2} --region {0}'
 
-    if not op.exists(args.outdir):
-        os.makedirs(args.outdir)
+   
 
     fmt = 'pdf' if args.pdf else 'png'
     for chrom in chromsizes:

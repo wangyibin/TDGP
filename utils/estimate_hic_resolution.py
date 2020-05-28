@@ -1,12 +1,15 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 """
-%prog sample_allValidPairs chrom_reference.sizes [Options]
+%(prog)s <sample_allValidPairs> <chrom_reference.sizes> [Options]
+    To estimate the resolution of hic maps
 """
 
 from __future__ import print_function
 
+import argparse
 import os
+import os.path as op
 import sys
 import pandas as pd
 import numpy as np
@@ -16,7 +19,7 @@ import multiprocessing as mp
 def cacl_100bp_counts(infile, outfile=None):
     if not outfile:
         outfile = infile.rsplit('.')[0] + ".100.counts"
-    if not os.path.exists(outfile):
+    if not os.path.exists(outfile) and op.getsize(outfile):
         cmd = """cat {} | awk '{{a[$2][int($3/100)]++;a[$5][int($6/100)]++}}END{{for (j in a) for (i in a[j]) printf "%s\\t%s\\t%d\\n",j,i,a[j][i]}}' > {}""".format(infile, outfile)
         print(cmd)
         os.system(cmd)
@@ -93,11 +96,19 @@ def main(infile, chrom_list, threads=10):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("*"*79)
-        print("Usage: {} sample.allValidPairs chrom.sizes".format(os.path.basename(sys.argv[0])))
-        print("*"*79)
+    p = p=argparse.ArgumentParser(prog=op.basename(__file__),
+                        description=__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('allValidPairs', help='allValidParis file')
+    pReq.add_argument('chromsize', help='chromsize file')
+    pOpt.add_argument('-t', '--thread', type=int, default=10, 
+            help='thread numbers of program [default: %(default)]')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    
+    args = p.parse_args()
+    
 
-        sys.exit()
-
-    main(sys.argv[1], sys.argv[2])
+    main(args.allValidPairs, args.chromsize, args.thread)

@@ -1,0 +1,8 @@
+#!/usr/bin/env python
+# -*- coding:utf-8 -*-
+
+import sys
+from TDGP.analysis.ab import plotLineRegress
+
+if __name__ == "__main__":
+    plotLineRegress(sys.argv[1:])

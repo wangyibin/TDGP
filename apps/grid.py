@@ -3,13 +3,14 @@
 
 from __future__ import print_function
 
+import argparse
 import os
 import os.path as op
 import logging
 import sys
 
 from multiprocessing import Pool, Process, cpu_count
-from TDGP.apps.base import debug,listify
+from TDGP.apps.base import debug, listify, ActionDispatcher
 
 
 debug()
@@ -17,7 +18,7 @@ debug()
 def main():
 
     actions = (
-            ("parafly", ""),
+            ("clusterHeader", "print header of cluster system"),
         )
     p = ActionDispatcher(actions)
     p.dispatch(globals())
@@ -71,21 +72,21 @@ class CMD(object):
 
 PBS_HEADER = """#!/bin/bash
 #PBS -m ae
-#PBS -j eo
-#PBS -N {}
+#PBS -j eo {}
 #PBS -q {}
 #PBS -V 
-#PBS -l nodes=1:ppn={}
-cd $PBS_O_WORKDIR
+#PBS -l nodes=1:ppn={} {}
+if [[ ! -z $PBS_O_WORKDIR ]]; then
+    cd $PBS_O_WORKDIR
+fi
 """
 
 SGE_HEADER = """#!/bin/bash
 #$ -j y
 #$ -S /bin/bash
-#$ -cwd
-#$ -N {}
+#$ -cwd {}
 #$ -q {}
-#$ -pe mpi {}
+#$ -pe mpi {} {}
 """
 class Cluster(object):
     """
@@ -106,10 +107,13 @@ class Cluster(object):
 
     """
     
-    def __init__(self):
-        self.CLUSTER = 'SGE'
-        self.get()
-        self.get_header()
+    def __init__(self, cluster=None, 
+                    name=None, queue=None, 
+                    threads=1, array=None):
+        self.CLUSTER = cluster if cluster else None
+        if not self.CLUSTER:
+            self.get()
+        self.get_header(name, queue, threads, array)
         self.get_raw_header()
 
     def get(self):
@@ -120,27 +124,36 @@ class Cluster(object):
         try:
             self.CLUSTER = os.environ['CLUSTER']
         except KeyError:
+            self.CLUSTER = 'SGE'
             logging.warning('There is not environment `CLUSTER` in PATH')
+
         return self.CLUSTER
 
 
-    def get_header(self, name='jobs', queue='all.q', threads=1):
+    def get_header(self, name=None, queue=None, 
+                        threads=1, array=None):
         """
         According to the environment of `CLUSTER` to 
             return a header of cluster system
         """
         if self.CLUSTER.upper() == "SGE":
-            self.header = SGE_HEADER.format(name, queue, threads)
-            
+            name = "\n#$ -N " + name  if name else ""
+            queue = queue if queue else "all.q"
+            array = "\n#$ -t " + array if array else ""
+            self.header = SGE_HEADER.format(name, queue, threads, array)   
         elif self.CLUSTER.upper() == "PBS":
-            queue = 'workq' if queue == 'all.q' else queue
-            self.header = PBS_HEADER.format(name, queue, threads)
+            name = "\n#PBS -N " + name if name else ""
+            queue = queue if queue else "workq"
+            array = "\n#PBS -J " + array if array else ""
+            self.header = PBS_HEADER.format(name, queue, threads, array)
+
         else:
             logging.warning("there is not of header "
-                            "of cluster:`{}`".format(self.cluster))
+                            "of cluster:`{}`".format(self.CLUSTER))
+            sys.exit()
         return self.header
 
-    def get_raw_header(self, name='jobs', queue='all.q', threads=1):
+    def get_raw_header(self):
         """
         According to the environment of `CLUSTER` to 
             return a header of cluster system
@@ -151,7 +164,8 @@ class Cluster(object):
             self.raw_header = PBS_HEADER
         else:
             logging.warning("there is not of header "
-                            "of cluster:`{}`".format(self.cluster))
+                            "of cluster:`{}`".format(self.CLUSTER))
+            sys.exit()
         return self.raw_header
 
 
@@ -160,7 +174,38 @@ class Cluster(object):
 
     __retr__ = __str__
         
-        
-
-
+### out command ###
+def clusterHeader(args):
+    """
+    %(prog)s 
+    print the header of clustes
+    """    
+    p = p=argparse.ArgumentParser(prog=clusterHeader.__name__,
+                        description=clusterHeader.__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pOpt.add_argument('-c', '--cluster', default=None, 
+            help='cluster system [default: auto]')
+    pOpt.add_argument('-n', '--name', default=None,
+            help='name of jobs in cluster [default: jobs name]')
+    pOpt.add_argument('-q', '--queue', default=None, 
+            help='queue of cluster [default: auto]')
+    pOpt.add_argument('-t', '--threads', default=1, type=int,
+            help='threads number of program [default: %(default)s]')
+    pOpt.add_argument('-a', '--array', default=None, 
+            help='array jobs [default: %(default)s]')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
     
+    args = p.parse_args(args)
+    cluster = Cluster(args.cluster, args.name, 
+                             args.queue, args.threads,
+                            args.array)
+    print(cluster.header, file=sys.stdout)
+
+
+
+
+if __name__ == "__main__":
+    main()
