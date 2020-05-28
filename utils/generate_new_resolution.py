@@ -32,7 +32,7 @@ def build_matrix(allValidPairs,
 
     cmd = "cat {} | build_matrix --matrix-format upper \
             --binsize {} --chrsizes {} --ifile /dev/stdin \
-                --oprefix {}".format(allValidPairs, SCRIPT_PATH,
+                --oprefix {}".format(allValidPairs, 
                     binsize, chrsizes, oprefix)
     logging.debug("Starting to execute build_matrix in `{}`".format(binsize))
     retcode =  os.system(cmd)
@@ -45,8 +45,7 @@ def iced_norm(oprefix_path, binsize):
                                         op.basename(oprefix_path))
     cmd = "ice --results_filename {} --filter_low_counts_perc 0.02 \
         --filter_high_counts_perc 0 --max_iter 100 --eps 0.1 --remove-all-zeros-loci \
-            --output-bias 1 --verbose 1 {}".format(PYTHON_PATH, SCRIPT_PATH,
-                                            oprefix, iprefix)
+            --output-bias 1 --verbose 1 {}".format(oprefix, iprefix)
     logging.debug("Starting to execute iced_norm in `{}`".format(binsize))
     retcode = os.system(cmd)
 
