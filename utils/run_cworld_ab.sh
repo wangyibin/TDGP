@@ -42,6 +42,43 @@ if [ ! -f ${cworld_dir}/${genome}.refseq.txt ];then
 fi
 
 
+sparseToDense(){
+        echo "starting sparse to dense"
+        sparseToDense.py -b $bed $matrix -o ${name}.dense.matrix  -c
+
+        if [[ ${outdir} != "./" ]]; then mv *${name}.dense.matrix ${outdir}/cworld_results; fi
+}
+
+cworldheader(){
+        echo "staring create cworld header"
+        cworld_header.py $bed $genome -o ${outdir}/cworld_results -c
+        echo "created header"
+}
+
+
+addheader(){
+        echo "starting analysis compartments"
+        for dense in ${outdir}/cworld_results/*${name}*dense.matrix; do
+                echo ${dense%%.dense.matrix}
+        done | parallel -j ${thread} "addMatrixHeaders.pl -i {}.dense.matrix --xhf {}_abs.bed.header --yhf {}_abs.bed.header -v -o {}" 
+}
+matrix2compartment(){
+        cd  ${outdir}/cworld_results
+        for mtrx in *${name}*addedHeaders.matrix.gz;do
+                echo ${mtrx}
+        done | parallel -j ${thread} "matrix2compartment.pl -i {} " && \
+        cd -
+        echo "matrix2compartments done"
+} 
+
+mergeBedGraph(){
+        echo "merge all chromosome results"
+        cat ${outdir}/cworld_results/*${name}*addedHeaders.zScore.eigen1.bedGraph |sort -V |grep -v track > ${outdir}/${prefix}_all_eigen1.bg && \
+        bedGraphToBigWig ${outdir}/${prefix}_all_eigen1.bg ${chromsizes} ${outdir}/${prefix}_all_eigen1.bw
+        echo "Merge results done"
+}
+
+
 TE_analysis(){
         local te_data=$1
         echo "Starting analysis the TE density"
@@ -52,7 +89,7 @@ TE_analysis(){
         bedGraphToBigWig ${outdir}/${prefix}_TE_density.bg ${chromsizes} ${outdir}/${prefix}_TE_density.bw
         ab_boxplot.py ${outdir}/${prefix}_all_eigen1_TE_density.bg --xlabel 'TE' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_TE_density.pdf
         ab_dotplot.py ${outdir}/${prefix}_all_eigen1_gene_density.bg --xlabel 'Gene' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_TE_density_dotplot.pdf
-        echo "Done"
+        echo "TE analysis done"
 }
 
 GENE_analysis(){
@@ -62,40 +99,20 @@ GENE_analysis(){
         bedGraphToBigWig ${outdir}/${prefix}_gene_density.bg ${chromsizes} ${outdir}/${prefix}_gene_density.bw
         ab_boxplot.py ${outdir}/${prefix}_all_eigen1_gene_density.bg --xlabel 'Gene' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_gene_density.pdf &
         ab_dotplot.py ${outdir}/${prefix}_all_eigen1_gene_density.bg --xlabel 'Gene' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_gene_density_dotplot.pdf
-        echo "Done"
+        echo "Gene analysis done"
 }
 
-echo "starting sparse to dense"
 
 
-sparseToDense.py -b $bed $matrix -o ${name}.dense.matrix  -c
 
-
-if [[ ${outdir} != "./" ]]; then mv *${name}.dense.matrix ${outdir}; fi
-echo "staring create cworld header"
-cworld_header.py $bed $genome -o ${outdir} -c
-echo "created header"
-
-echo "starting analysis compartments"
-for dense in ${outdir}/*${name}*dense.matrix; do
-        echo ${dense%%.dense.matrix}
-done | parallel -j ${thread} "addMatrixHeaders.pl -i {}.dense.matrix --xhf {}_abs.bed.header --yhf {}_abs.bed.header -v -o {}" 
-for mtrx in ${outdir}/*${name}*addedHeaders.matrix.gz;do
-        echo ${mtrx}
-done | parallel -j ${thread} "matrix2compartment.pl -i {}"
-
-if [[ ${outdir} != "./" ]]; then mv *${name}.addedHeaders* ${outdir}; fi 
-
-cat ${outdir}/*${name}*addedHeaders.zScore.eigen1.bedGraph |sort -V |grep -v track > ${outdir}/${prefix}_all_eigen1.bg && \
-bedGraphToBigWig ${outdir}/${prefix}_all_eigen1.bg ${chromsizes} ${outdir}/${prefix}_all_eigen1.bw
-
-# moving cworld intermediate results
 mkdir -p ${outdir}/cworld_results
-mv ${outdir}/*${name}*addedHeaders.* ${outdir}/cworld_results
 
-echo "Done"
+sparseToDense 
+cworldheader
+addheader
 
-
+matrix2compartment 
+mergeBedGraph
 GENE_analysis &
 
 if [[ -e ${TE_DATA} ]]; then
@@ -104,8 +121,6 @@ TE_suffix="--TE ${outdir}/${prefix}_TE_density.bg"
 fi
 wait
 
-
-
-python -m TDGP.analysis.ab quickPlot ${outdir}/${prefix}_all_eigen1.bg $chromsizes -g ${outdir}/${prefix}_all_eigen1_gene_density.bg  ${TE_suffix} -o ${outdir}/quickPlot | parallel -j ${thread} {} &
+#python -m TDGP.analysis.ab quickPlot ${outdir}/${prefix}_all_eigen1.bg $chromsizes -g ${outdir}/${prefix}_all_eigen1_gene_density.bg  ${TE_suffix} -o ${outdir}/quickPlot | parallel -j ${thread} {} &
 
 wait

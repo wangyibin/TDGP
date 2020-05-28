@@ -4,6 +4,6 @@ numpy
 matplotlib
 pandas
 pyranges
-seaborn
+seaborn >= 0.9.0
 pyGenomeTracks
 deeptools

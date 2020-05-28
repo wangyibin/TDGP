@@ -63,9 +63,9 @@ def main(args):
     
     pOpt.add_argument('-o', '--output', default=None,
             help='output file [default: inputfile.pdf]')
-    pOpt.add_argument('--xLabel', default='PCA1',
+    pOpt.add_argument('--xlabel', default='PCA1',
             help='xLabel of picture [default: %(default)s]')
-    pOpt.add_argument('--yLabel', default='Count',
+    pOpt.add_argument('--ylabel', default='Count',
             help='yLabel of picture [default: %(default)s]')
     pOpt.add_argument('--scale', default=1, type=int,
             help='scale of yticks [default: (default)s]')
@@ -79,8 +79,8 @@ def main(args):
     output = args.output if args.output \
                 else op.basename(args.bg5file).split('.')[0] + '_dotplot.pdf'
     plot(ax, df, output, 
-            xlabel=args.xLabel, 
-            ylabel=args.yLabel, 
+            xlabel=args.xlabel, 
+            ylabel=args.ylabel, 
             scale=args.scale)
     
 

@@ -16,10 +16,12 @@ import numpy as np
 import multiprocessing as mp
 
 
-def cacl_100bp_counts(infile, outfile=None):
+def cacl_100bp_counts(infile, outfile=None, outdir="./"):
+    outdir = op.abspath(outdir)
     if not outfile:
-        outfile = infile.rsplit('.')[0] + ".100.counts"
-    if not os.path.exists(outfile) and op.getsize(outfile):
+        outfile = outdir + "/" + op.basename(infile).rsplit('.')[0] + ".100.counts"
+    
+    if not os.path.exists(outfile) or not op.getsize(outfile):
         cmd = """cat {} | awk '{{a[$2][int($3/100)]++;a[$5][int($6/100)]++}}END{{for (j in a) for (i in a[j]) printf "%s\\t%s\\t%d\\n",j,i,a[j][i]}}' > {}""".format(infile, outfile)
         print(cmd)
         os.system(cmd)
@@ -50,7 +52,7 @@ def merge_windows(args):
     return bin, upper*1.0 / total
 
 
-def multi_cacl(df,chrom_dict, threads=10):    
+def multi_cacl(df, chrom_dict, threads=10):    
     values = []
     task_list = [(df, chrom_dict, bin) for bin in range(10, 1001, 10)]
     pool=mp.Pool(threads)
@@ -59,11 +61,12 @@ def multi_cacl(df,chrom_dict, threads=10):
 
     for i in sorted(res):
         values.append(res[i])
-    print(values)
+
     return np.array(values)
 
 
-def dotplot(values, outprefix, percent=0.8):
+def dotplot(values, outprefix, percent=0.8, outdir='./'):
+    outdir = op.abspath(outdir)
     import matplotlib as mpl
     mpl.use("Agg")
     import matplotlib.pyplot as plt
@@ -82,17 +85,22 @@ def dotplot(values, outprefix, percent=0.8):
     plt.xlabel("Resolution (kb)", fontsize=12)
     plt.ylabel("Percent (X100%)", fontsize=12)
     plt.title("Hi-C")
-    plt.savefig('{}.pdf'.format(outprefix), dpi=300)
+    plt.savefig('{}/{}.pdf'.format(outdir, outprefix), dpi=300)
+    plt.savefig('{}/{}.png'.format(outdir, outprefix), dpi=300)
 
-def main(infile, chrom_list, threads=10):
+def main(infile, chrom_list, 
+        outdir='./', threads=10):
+
     outprefix = infile.split("_")[0]
+    
+    chrom_dict = dict(i.strip().split() 
+                        for i in open(chrom_list) if i.strip())
     print(outprefix)
-    chrom_dict = dict(i.strip().split() for i in open(chrom_list) if i.strip())
-    print(chrom_dict)
-    infile = cacl_100bp_counts(infile)
+    infile = cacl_100bp_counts(infile, outdir=outdir)
     df = import_data(infile)
+    print(chrom_dict)
     values = multi_cacl(df, chrom_dict, threads)
-    dotplot(values, outprefix)
+    dotplot(values, outprefix, outdir)
 
 
 if __name__ == "__main__":
@@ -105,10 +113,15 @@ if __name__ == "__main__":
     pReq.add_argument('chromsize', help='chromsize file')
     pOpt.add_argument('-t', '--thread', type=int, default=10, 
             help='thread numbers of program [default: %(default)]')
+    pOpt.add_argument('-o', '--outdir', default='./',
+            help='outdir of results [default: %(default)s]')
     pOpt.add_argument('-h', '--help', action='help',
             help='show help message and exit.')
     
     args = p.parse_args()
     
 
-    main(args.allValidPairs, args.chromsize, args.thread)
+    main(args.allValidPairs, 
+            args.chromsize, 
+            args.outdir, 
+            args.thread)
