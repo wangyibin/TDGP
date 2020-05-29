@@ -78,9 +78,9 @@ def dotplot(values, outprefix, percent=0.8, outdir='./'):
     plt.plot(values_upper_x, values_upper, '.', color='#89023E', label='Achieved resolution')
     plt.plot(values_below_x, values_below, '.', color='#b4b4b4', label='Unattained resolution')
     plt.legend(loc=0)
-    plt.plot([0,100],[percent, percent], '--', color='#BB4853') 
-    plt.xticks(range(0,101,10), map(lambda x: str(x), range(0, 101, 10)))
-    plt.xlim(0,100)
+    plt.plot([0, 100],[percent, percent], '--', color='#BB4853') 
+    plt.xticks(range(0, 101, 10), map(lambda x: str(x), range(0, 101, 10)))
+    plt.xlim(0, 100)
     plt.ylim(0.0, 1.2)
     plt.xlabel("Resolution (kb)", fontsize=12)
     plt.ylabel("Percent (X100%)", fontsize=12)
@@ -100,7 +100,7 @@ def main(infile, chrom_list,
     df = import_data(infile)
     print(chrom_dict)
     values = multi_cacl(df, chrom_dict, threads)
-    dotplot(values, outprefix, outdir)
+    dotplot(values, outprefix, outdir=outdir)
 
 
 if __name__ == "__main__":

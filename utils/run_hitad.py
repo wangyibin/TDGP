@@ -92,7 +92,7 @@ hitad_command = hitad_command + "\ncooler dump -t bins ${outdir}/${matrix%%.matr
 hitad_command = hitad_command + "\ncooler dump -t chroms ${outdir}/${matrix%%.matrix}.cool > ${outdir}/${matrix%%.matrix}.chromsizes"
 hitad_command = hitad_command + "\ncut -f 1-3 ${outdir}/${matrix%%.matrix}.hitad_out.merged.txt > ${outdir}/${matrix%%.matrix}.hitad.domain"
 hitad_command = hitad_command + "\npython -m TDGP.analysis.tad quickPlotTAD ${outdir}/${matrix%%.matrix}.cool "
-hitad_command = hitad_command + "${outdir}/${matrix%%.matrix}.hitad.domain ${outdir}/${matrix%%.matrix}.chromsizes | parallel -j $ncpu {}"
+hitad_command = hitad_command + "${outdir}/${matrix%%.matrix}.hitad.domain ${outdir}/${matrix%%.matrix}.chromsizes -o ${outdir} | parallel -j $ncpu {}"
 #hitad_command = hitad_command + "\nsort -k1,1 -k2,2n ${matrix%%.matrix}_DI.bg > ${matrix%%.matrix}_DI.sorted.bg"
 #hitad_command = hitad_commdan + "\nbedGraphToBigWig ${matrix%%.matrix}_DI.sorted.bg "
 

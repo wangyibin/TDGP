@@ -1079,6 +1079,7 @@ def quickPlotTAD(args):
         cf.set('DI_bg', 'negative color', "#0B1D51")
         cf.set('DI_bg', 'color', '#787596')
 
+    
     cf.add_section('x-axis')
     cf.set('x-axis', 'where', 'bottom')
     if not op.exists(args.outdir):
