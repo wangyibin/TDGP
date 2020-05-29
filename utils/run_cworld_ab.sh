@@ -88,7 +88,7 @@ TE_analysis(){
         cut -f 1-3,5 ${outdir}/${prefix}_all_eigen1_TE_density.bg > ${outdir}/${prefix}_TE_density.bg && \
         bedGraphToBigWig ${outdir}/${prefix}_TE_density.bg ${chromsizes} ${outdir}/${prefix}_TE_density.bw
         ab_boxplot.py ${outdir}/${prefix}_all_eigen1_TE_density.bg --xlabel 'TE' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_TE_density.pdf
-        ab_dotplot.py ${outdir}/${prefix}_all_eigen1_gene_density.bg --xlabel 'Gene' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_TE_density_dotplot.pdf
+        ab_dotplot.py ${outdir}/${prefix}_all_eigen1_gene_density.bg --xlabel 'TE' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_TE_density_dotplot.pdf
         echo "TE analysis done"
 }
 
