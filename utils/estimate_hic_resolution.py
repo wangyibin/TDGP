@@ -91,7 +91,7 @@ def dotplot(values, outprefix, percent=0.8, outdir='./'):
 def main(infile, chrom_list, 
         outdir='./', threads=10):
 
-    outprefix = infile.split("_")[0]
+    outprefix = op.basename(infile).split("_")[0]
     
     chrom_dict = dict(i.strip().split() 
                         for i in open(chrom_list) if i.strip())
