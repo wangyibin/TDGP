@@ -121,6 +121,6 @@ TE_suffix="--TE ${outdir}/${prefix}_TE_density.bg"
 fi
 wait
 
-#python -m TDGP.analysis.ab quickPlot ${outdir}/${prefix}_all_eigen1.bg $chromsizes -g ${outdir}/${prefix}_all_eigen1_gene_density.bg  ${TE_suffix} -o ${outdir}/quickPlot | parallel -j ${thread} {} &
+python -m TDGP.analysis.ab quickPlot ${outdir}/${prefix}_all_eigen1.bg $chromsizes -g ${outdir}/${prefix}_all_eigen1_gene_density.bg  ${TE_suffix} -o ${outdir}/quickPlot | parallel -j ${thread} {} &
 
 wait

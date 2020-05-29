@@ -296,6 +296,8 @@ class TADFile(BaseFile):
         ax.set_ylabel('Frequency')
         ax.set_title('TAD Size Distribution Per Level')
         plt.savefig(out, dpi=300)
+        plt.savefig(out.rsplit(".")[0] + ".png", dpi=300)
+
 
     @classmethod
     def plotSizeDist(self,
@@ -326,7 +328,8 @@ class TADFile(BaseFile):
         ax.set_ylabel('Frequency', fontsize=14)
         ax.set_title('TAD Size Distributions', fontsize=16)
         plt.savefig(out, dpi=300)
-
+        plt.savefig(out.rsplit(".")[0] + ".png", dpi=300)
+        
     def plotSizeDistMulti(self, ax, data, label, scale=1000):
         scale_units = {1: 'bp', 1000: 'kb', 1e6: 'Mb'}
         data = np.array(data) / scale
