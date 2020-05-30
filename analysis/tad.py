@@ -1031,7 +1031,8 @@ def quickPlotTAD(args):
                         'three columns(chrom start end).')
     pReq.add_argument('chrom_size', help='chromosome sizes file')
     pOpt.add_argument('--bg', default=None, 
-            help='Direction index bedGraph file [default: %(default)]')
+            help='Direction index bedGraph file [default: %(default)s]')
+
     pOpt.add_argument('--min_value', default=3, type=str, 
             help='min value of hic matrix [default: %(default)s]')
     pOpt.add_argument('-d', '--depth', default=None, type=str,
