@@ -18,9 +18,10 @@ import pandas as pd
 import cooler
 import math
 import scipy
-import seaborn as sns
 import matplotlib as mpl
 mpl.use('Agg')
+import seaborn as sns
+
 import matplotlib.pyplot as plt
 
 from collections import defaultdict, OrderedDict

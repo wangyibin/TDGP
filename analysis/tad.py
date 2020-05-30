@@ -1069,9 +1069,9 @@ def quickPlotTAD(args):
     cf.add_section('tad')
     cf.set('tad', 'file', args.domain)
     cf.set('tad', 'display', 'triangles')
-    cf.set('tad', 'border color', 'black')
+    cf.set('tad', 'border_color', 'black')
     cf.set('tad', 'color', 'none')
-    cf.set('tad', 'overlay previous', 'share-y')
+    cf.set('tad', 'overlay_previous', 'share-y')
 
     
     if args.bg:
@@ -1080,7 +1080,7 @@ def quickPlotTAD(args):
         cf.set('DI_bg', 'file', args.bg)
         cf.set('DI_bg', 'height', '4')
         cf.set('DI_bg', 'title', 'DI')
-        cf.set('DI_bg', 'negative color', "#0B1D51")
+        cf.set('DI_bg', 'negative_color', "#0B1D51")
         cf.set('DI_bg', 'color', '#787596')
 
     
