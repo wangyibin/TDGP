@@ -732,14 +732,15 @@ def plotLineRegress(args):
             if not onlySwitch:
                 ax.scatter(xdf.loc[chrom].pca1, ydf.loc[chrom].pca1, s=2, label=chrom)
             else:
-                ax.scatter(xdf.loc[chrom].pca1, ydf.loc[chrom].pca1, s=2, color='#209093')
+                ax.scatter(xdf.loc[chrom].pca1, ydf.loc[chrom].pca1, 
+                            label=None, s=2, color='#209093')
                 tmp_df = df.loc[chrom]
                 a2b = tmp_df.loc[(tmp_df.pca11 > 0 ) & (tmp_df.pca12 < 0)]
                 b2a = tmp_df.loc[(tmp_df.pca11 < 0 ) & (tmp_df.pca12 > 0)]
                 x = pd.concat([a2b.pca11, b2a.pca11])
                 y = pd.concat([a2b.pca12, b2a.pca12])
                 ax.scatter(x, y, s=2, label="{} ({})".format(chrom, len(x)))
-            leg = ax.legend(bbox_to_anchor=(1, 0.5))
+        leg = ax.legend(bbox_to_anchor=(1, 0.5))
 
         ax = plr(ax, xdf.pca1, ydf.pca1, 
                             xlabel=xlabel, ylabel=ylabel, scatter=False)
