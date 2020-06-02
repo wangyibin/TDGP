@@ -803,7 +803,7 @@ def getSyntenyGenePca(args):
     pReq.add_argument('bed2', help="species2 synteny bedfile")
 
     pOpt.add_argument('--plot', action='store_true', default=False,
-            help='is plot the lineregress [default: %default]')
+            help='is plot the lineregress [default: %(default)s]')
     pOpt.add_argument('-h', '--help', action='help',
             help='show help message and exit.')
     

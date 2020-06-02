@@ -449,11 +449,9 @@ def validStat(args):
         df = pd.DataFrame([db])
         df = df.T if fmt == '1' else df
         header = None if fmt == '1' else True
-        index = True if fmt == '1' else None
-        if out.rsplit(".")[-1] in ['xls', 'xlsx']:
-            df.to_excel(out, header=header, index=index)
-        else:
-            df.to_csv(out, sep='\t', header=header, index=index)
+        index = True if fmt == '1' else None 
+        df.to_excel(out + ".xls", header=header, index=index)
+        df.to_csv(out, sep='\t', header=header, index=index)
         logging.debug('Output file to `{}`'.format(out))
 
 
