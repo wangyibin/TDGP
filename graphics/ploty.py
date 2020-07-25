@@ -99,7 +99,8 @@ def plotLineRegress(ax, xdata, ydata,
     ax.set_ylabel("{}".format(ylabel), fontsize=12)
     ax.legend(legend_elements, label, loc='best')
             #bbox_to_anchor=(1, 0.5))
-    
+    #ax.xaxis.set_major_locator(plt.MaxNLocator(5))
+    #ax.yaxis.set_major_locator(plt.MaxNLocator(5))
     return ax
 
 

@@ -64,7 +64,10 @@ def getChromPairsMatrix(cool, hm, chrom1, chrom2):
     start2 = idx2[0]
     end2 = idx2[-1]
     return hm[start1: end1 + 1, start2: end2 + 1]
-def getBetweenHomo(cool, chrom_homo_pairs):
+def getBetweenHomo(cool, 
+                chrom_homo_pairs, 
+                method='median'):
+    method_func = np.median if method == 'median' else np.mean
     contact_data = []
     hm = cool2matrix(cool)
     for homo_chroms in chrom_homo_pairs:
@@ -72,11 +75,12 @@ def getBetweenHomo(cool, chrom_homo_pairs):
         for chrom_pair in chrom_pairs:
             chrom1, chrom2 = chrom_pair
             chrom_hm = getChromPairsMatrix(cool, hm, chrom1, chrom2)
-            contact_data.extend((np.mean(chrom_hm, axis=1)))
+            contact_data.extend((method_func(chrom_hm, axis=1)))
     
     return contact_data
 
-def getWithinChromosome(cool):
+def getWithinChromosome(cool, method='median'):
+    method_func = np.median if method == 'median' else np.mean
     chroms = cool.chromnames
     hm = cool2matrix(cool)
     contact_data = []
@@ -84,18 +88,19 @@ def getWithinChromosome(cool):
         idx = cool.bins().fetch(chrom).index
         start = idx[0]
         end = idx[-1]
-        contact_mean_data = np.mean(hm[start: end + 1, start: end + 1], axis=1)
+        contact_mean_data = method_func(hm[start: end + 1, start: end + 1], axis=1)
         contact_data.extend(contact_mean_data)
     return contact_data
 
 
-def getBetweenHeter(cool, chrom_heter_pairs):
+def getBetweenHeter(cool, chrom_heter_pairs, method='median'):
+    method_func = np.median if method == 'median' else np.mean
     contact_data = []
     hm = cool2matrix(cool)
     for chrom_pair in chrom_heter_pairs:
         chrom1, chrom2 = chrom_pair
         chrom_hm = getChromPairsMatrix(cool, hm, chrom1, chrom2)
-        contact_data.extend(np.mean(chrom_hm, axis=1))
+        contact_data.extend(method_func(chrom_hm, axis=1))
     return contact_data
 
 def plotBoxPlot(data, resolution_string, output, dpi=300):
@@ -133,6 +138,9 @@ def main(args):
             help='matrix of contacts', required=True)
     pReq.add_argument('-o', '--output', required=True,
             help='output file of pictures')
+    pOpt.add_argument('--method', choices=['average', 'median'], 
+            default='median',
+            help='method of interaction frequency per bin [default: %(default)s]')
     pOpt.add_argument('-h', '--help', action='help',
             help='show help message and exit.')
     
@@ -144,9 +152,9 @@ def main(args):
     homo_chroms = sorted(set(map(lambda x: x[:-1], all_chroms)))
     chrom_heter_pairs = list(filter(is_heter, list(combinations(all_chroms, 2))))
     chrom_homo_pairs = find_homo_chrom(homo_chroms, all_chroms)
-    WithinChrom_data = getWithinChromosome(cool)
-    BetweenHomo_data = getBetweenHomo(cool, chrom_homo_pairs)
-    BetweenHeter_data = getBetweenHeter(cool, chrom_heter_pairs)
+    WithinChrom_data = getWithinChromosome(cool, args.method)
+    BetweenHomo_data = getBetweenHomo(cool, chrom_homo_pairs, args.method)
+    BetweenHeter_data = getBetweenHeter(cool, chrom_heter_pairs, args.method)
     resolution_string = chrom_size_convert(cool.binsize)
     data = [WithinChrom_data, BetweenHomo_data, BetweenHeter_data]
 

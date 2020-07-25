@@ -11,8 +11,10 @@ import argparse
 import logging
 import numpy as np
 import multiprocess
+import gzip
 import os
 import os.path as op
+import random
 import re
 import shutil
 import subprocess
@@ -23,6 +25,7 @@ from glob import glob
 from TDGP.apps.base import ActionDispatcher
 from TDGP.apps.base import check_file_exists, debug
 from TDGP.apps.base import listify
+from TDGP.apps.grid import parallel
 
 
 def main():
@@ -80,6 +83,37 @@ def splitfastq(infile, outdir, nreads):
     
 ## out command
 
+def downsample(args):
+    """
+    %(prog)s R1 R2 [Options]
+        random select fastq to downsample
+    """
+    p = p=argparse.ArgumentParser(prog=downsample.__name__,
+                        description=downsample.__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('-1', required=True,
+            help='left fastq file')
+    pReq.add_argument('-2', required=True,
+            help='right fastq file')
+    pOpt.add_argument('-n', type=int, 
+            help='number of reads each fastq to select')
+    pOpt.add_argument('-s', type=float,
+            help='size of data each fastq')
+    pOpt.add_argument('-l', '--length', default=150, type=int,
+            help='length of reads [default: %(default)s]')
+    
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    
+    args = p.parse_args(args)
+
+    
+    
+def mv(x):
+    shutil.move(x, "./")    
+
 def splitFastq(args):
     """
     %(prog)s R1 R2 
@@ -120,7 +154,7 @@ def splitFastq(args):
     gzip_cmd = 'gzip_cmd.list'
     with open(gzip_cmd, 'w') as fo:
         print("\n".join(map(cmd_func, res)), file=fo)
-
+    
     if not args.decompress:
         cmd = "cat {} | parallel -j {} {{}}".format(gzip_cmd, args.threads)
         retcode = subprocess.call(cmd, shell=True)
@@ -128,7 +162,13 @@ def splitFastq(args):
             logging.error('Failed to excude command of `{}`'.format(cmd))
         else:
             logging.debug('Successful compress all fastq file.')
+        res = list(map(lambda x: x + ".gz", res))
+    
+    
+    parallel(mv, list(res), args.threads)
+    os.system("rm -rf {}".format(" ".join(outs)))
     logging.debug('Done')
+
 
 
 if __name__ == "__main__":

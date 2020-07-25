@@ -248,21 +248,35 @@ class ABComparisionSpecies(object):
         >>> ABC.getSyntenyGenePca(bg1, bg2, bed1, bed2)
         """
         list(map(check_file_exists, (bg1, bg2, bed1, bed2)))
-        bedtools_formatter = "bedtools intersect -a {} -b {} -wao -f 0.5  |cut -f 1-4,8 > {}\n"
+        bedtools_formatter = "bedtools intersect -a {} -b {} -wao -f 0.5 | cut -f 1-4,8 > {}\n"
+        grep_formatter = "grep -n -w '\.' {} | cut -d ':' -f 1"
         out_formatter = "{}.synteny.eigen1.bg"
         cut_pca_formatter = "cut -f 5 {0}.synteny.eigen1.bg > {0}.pca1 \n"
         prefix1 = bed1.split('.')[0]
         prefix2 = bed2.split('.')[0]
-
+        out1 = out_formatter.format(prefix1)
+        out2 = out_formatter.format(prefix2)
         bedtools_cmd1 = bedtools_formatter.format(bed1, bg1, 
-                            out_formatter.format(prefix1))
+                            out1)
         bedtools_cmd2 = bedtools_formatter.format(bed2, bg2, 
-                            out_formatter.format(prefix2))
+                            out2)
+        list(map(os.system, (bedtools_cmd1, bedtools_cmd2)))
+        grep_cmd1 = grep_formatter.format(out1)
+        grep_cmd2 = grep_formatter.format(out2)
+        miss_line_number1 = [i.strip() for i in os.popen(grep_cmd1)]
+        miss_line_number2 = [i.strip() for i in os.popen(grep_cmd2)]
+        miss_line_number = [*miss_line_number1, *miss_line_number2]
+        sed_formatter = "sed -i '{}d' {}"
+        for line in miss_line_number:
+            logging.warning('Line {} is missing, have removed'.format(line))
+            os.system(sed_formatter.format(line, out1))
+            os.system(sed_formatter.format(line, out2))
+        
         cut_cmd1 = cut_pca_formatter.format(prefix1)
         cut_cmd2 = cut_pca_formatter.format(prefix2)
         paste_cmd = "paste {0}.synteny.eigen1.bg {1}.synteny.eigen1.bg > {0}-{1}.synteny.eigen1.bg\n".format(prefix1, 
                                                                             prefix2)
-        list(map(os.system, (bedtools_cmd1, bedtools_cmd2, cut_cmd1, cut_cmd2, paste_cmd)))
+        list(map(os.system, (cut_cmd1, cut_cmd2, paste_cmd)))
         logging.debug('Successful to getSyntenyGenePca')
         
         synteny_pairs = '{0}-{1}.synteny.eigen1.bg'.format(prefix1, prefix2)
@@ -306,8 +320,12 @@ class ABComparisionSpecies(object):
         with open(infile, 'r') as fp:
             for line in fp:
                 line_list = line.strip().split()
+                if len(line_list) != 10:
+                    continue
                 v1 = line_list[4]
                 v2 = line_list[9]
+                if v1 == "." or v2 == ".":
+                    continue
                 type_ = switch_type(float(v1), float(v2))
                 if type_ in listify(stype):
                     line_list.append(type_)
@@ -343,7 +361,9 @@ class ABComparisionSpecies(object):
         from seaborn import regplot
         assert len(a) == len(b), "`a` and `b` length must euqual"
         if not out:
-            out = "{}-{}_ab_lineregress.pdf".format(xlabel, ylabel)
+            out_xlabel = xlabel.replace("\s+", "")
+            out_ylabel = ylabel.replace("\s+", "")
+            out = "{}-{}_ab_lineregress.pdf".format(out_xlabel, out_ylabel)
         scatter_params = dict(color='#209093', s=2)
         line_params = dict(color='#032F49', lw=2)
         slope, intercept, rvalue, pvalue, stderr = linregress(a, b)
@@ -356,6 +376,8 @@ class ABComparisionSpecies(object):
         #ax.set_title('The regression of PC1')
         ax.set_xlabel("{}".format(xlabel), fontsize=12)
         ax.set_ylabel("{}".format(ylabel), fontsize=12)
+        #ax.xaxis.set_major_locator(plt.MaxNLocator(5))
+        #ax.yaxis.set_major_locator(plt.MaxNLocator(5))
         plt.legend(legend_elements, label, loc='best')
                 #bbox_to_anchor=(1, 0.5))
         plt.savefig(out, dpi=300, bbox_inches='tight')
@@ -402,6 +424,7 @@ class ABComparisionSpecies(object):
             ax = plt.gca() 
             ax.xaxis.set_major_locator(mylocator) # set xaxis major locator to 6
             #legend_elements = ([Line2D([0], [0], color=i, lw=2) for i in color_palette])
+   
             #legend_labels = list(map(calc, hue_order))
             #ax.legend(legend_elements, legend_labels, bbox_to_anchor=(1.05, 0.5), loc=2)
             g._legend.set_title('Switch type') 
@@ -498,7 +521,7 @@ def switch_type_in_df(df):
     elif df.value1 < 0 and df.value2 >= 0:
         return 'BA'
 
-def two_species_conserved_compare(tgy_df, jgy_df):
+def two_species_conserved_compare(tgy_df, jgy_df, method='length'):
     """
     compare two file ab compartments  switch type and return a directory.
     """
@@ -506,7 +529,9 @@ def two_species_conserved_compare(tgy_df, jgy_df):
     length_df = tgy_df.end - tgy_df.start
     for i in range(len(tgy_df)):
         v1, v2 = tgy_df.pca1.iloc[i], jgy_df.pca1.iloc[i]
-        db[switch_type(v1, v2)] += length_df.iloc[i]
+        value = length_df.iloc[i] if method == 'length' else 1
+        db[switch_type(v1, v2)] += value
+    
     
     return db
 
@@ -588,11 +613,11 @@ def two_species_ab_compare_plot(tgy_df, jgy_df, chrom,
 
 
 
-def plot_two_species_conserved_pie(tgy_df, jgy_df):
+def plot_two_species_conserved_pie(tgy_df, jgy_df, method='length'):
     """
     Pie plot of two species conserved.
     """
-    db = two_species_conserved_compare(tgy_df, jgy_df)
+    db = two_species_conserved_compare(tgy_df, jgy_df, method)
     conserved = db['A Stable'] + db['B Stable']
     non_conserved = db['A2B'] + db['B2A']
     conserved_label = chrom_size_convert(conserved)
@@ -607,12 +632,14 @@ def plot_two_species_conserved_pie(tgy_df, jgy_df):
             autotext.set_fontsize(20)
 
 
-def plot_two_species_ab_pie(tgy_df, jgy_df, out):
+def plot_two_species_ab_pie(tgy_df, jgy_df, out, method='length'):
     """
     Pie plot of two species A/B switch type.
     """
-    db = two_species_conserved_compare(tgy_df, jgy_df)
-    func = lambda x: "{} ({})".format(x[0], chrom_size_convert(x[1]))
+    db = two_species_conserved_compare(tgy_df, jgy_df, method)
+    func_number = lambda x: "{} ({:,})".format(x[0], x[1])
+    func_length = lambda x: "{} ({})".format(x[0], chrom_size_convert(x[1]))
+    func = func_length if method == 'length' else func_number
     labels = list(map(func, db.items()))
     colors = ['#265e8a', '#032F49','#BB4853', '#209093','#a83836',]
     mpl.rc('font', size=16.0)
@@ -690,6 +717,8 @@ def plotLineRegress(args):
         if not out:
             out = "{}-{}_ab_lineregress_perchrom".format(xlabel, ylabel)
         chrom_list = sorted(set(xdf.index))
+        #chrom2_list = sorted(set(ydf.index))
+        #chrom_list = list(zip(chrom1_list, chrom2_list))
         nrows = math.ceil(len(chrom_list) / ncols)
         fig, axes = plt.subplots(int(math.ceil(len(chrom_list)*1.0/ncols)),
                         ncols, figsize=(ncols*4 + 3,
@@ -923,6 +952,9 @@ def plotSwitchPie(args):
             help='infile of pca1')
     pReq.add_argument('-o', '--out', required=True,
             help='output file')
+    pOpt.add_argument('-m', '--method', choices=['length', 'count'],
+            default='length', 
+            help='method of label [default: %(default)s]')
     pOpt.add_argument('-h', '--help', action='help',
             help='show help message and exit.') 
 
@@ -930,7 +962,7 @@ def plotSwitchPie(args):
     infile1, infile2 = args.infile
     df1 = import_ab_data(infile1)
     df2 = import_ab_data(infile2)
-    plot_two_species_ab_pie(df1, df2, args.out)
+    plot_two_species_ab_pie(df1, df2, args.out, method=args.method)
 
 
 def plotEnrichment(args):

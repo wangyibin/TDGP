@@ -1,4 +1,4 @@
-#!/public1/home/stu_wangyibin/software/anaconda2/envs/hicexplorer/bin/python3.6
+#!/usr/bin/env python
 # -*- coding:utf-8 -*-
 
 import warnings 

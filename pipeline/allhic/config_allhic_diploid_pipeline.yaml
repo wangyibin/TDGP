@@ -1,0 +1,27 @@
+
+genome:
+        tig.fasta
+
+sample:
+        - AD
+
+ncpus:
+        20
+
+enzyme:
+        HINDIII
+
+cluster_N:
+        1
+
+
+
+
+tag:
+        - R1
+        - R2
+
+fq_suffix:
+        fq.gz
+
+

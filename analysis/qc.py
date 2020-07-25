@@ -463,7 +463,7 @@ def validStat(args):
 
 def plotDistDensity(args):
     """
-    %prog all.validpairs [Options]
+    %prog all.validpairs out [Options]
         Plot the IDE of all genome or per chromosome
     """
     p = OptionParser(plotDistDensity.__doc__)
