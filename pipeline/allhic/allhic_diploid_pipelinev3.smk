@@ -67,50 +67,26 @@ rule fa_index:
         "samtools faidx {input} & bwa index -a bwtsw {input} 2>{log}"
 
 
-
-rule bwa_aln:
+rule bwa_mem:
     input:
         fabwt = lambda wildcards: "{}.bwt".format(FA),
-        fq = expand("data/{{sample}}_{tag}.{fq_suffix}", tag=config['tag'], fq_suffix=[fq_suffix])
-    output:
-        "bwa_result/{sample}_{tag}.sai"
-    log:
-        "logs/{sample}_{tag}.log"
-    threads: ncpus
-    shell:
-        "bwa aln -t {threads} {FA} {input.fq} > {output} 2>{log}"
-
-
-rule bwa_sampe:
-    input:
         fq = expand("data/{{sample}}_{tag}.fastq.gz", tag=config["tag"]),
-        sai = expand("bwa_result/{{sample}}_{tag}.sai", tag=config["tag"]),
-        
-    output:
-        "bwa_result/{sample}.bwa_sampe.bam"
-    log:
-        "logs/{sample}.bwa_sampe.log"
-    shell:
-        "bwa sampe {FA} {input.sai} {input.fq} | samtools view -bS > {output}"
 
-rule merge_bam:
-    input:
-        bam = expand("bwa_result/{sample}.bwa_sampe.bam", sample=SAMPLES)
     output:
-        expand("bwa_result/{name}.bwa_merged.bam", name=config['sample'])
+        "bwa_result/{sample}.bwa_mem.bam"
     log:
-        expand("logs/{name}.bwa_merged.log", name=config['sample'])
+        "logs/{sample}.bwa_mem.log"
     threads: ncpus
     shell:
-        "samtools merge -@ {threads} {output} {input.bam} 1>{log} 2>&1"
+        "bwa mem -t {threads} -5SPM {FA} {input.fq}  | samtools view -@ {threads} -F 12 -bhS -> {output}"
 
 
 
 rule preprocess_bam:
     input:
-        bam = "bwa_result/{sample}.bwa_merged.bam"
+        bam = "bwa_result/{sample}.bwa_mem.bam"
     output:
-        "bwa_result/{sample}.bwa_merged.REduced.paired_only.bam"
+        "bwa_result/{sample}.bwa_mem.REduced.paired_only.bam"
     log:
         "logs/{sample}_preprocess.log"
     params:
@@ -119,33 +95,51 @@ rule preprocess_bam:
         "PreprocessSAMs.pl {input} {FA} {params.enzyme} 2>&1 1>{log}"
 
 
-rule filter_bam:
-    input:
-        "bwa_result/{sample}.bwa_merged.REduced.paired_only.bam"
-    output:
-        "allhic_result/{sample}.clean.sam"
-    log:
-        "logs/{sample}_filter.log"
-    shell:
-        "filterBAM_forHiC.pl {input} {output} 1>{log} 2>&1"
+# rule filter_bam:
+#     input:
+#         "bwa_result/{sample}.bwa_mem.REduced.paired_only.bam"
+#     output:
+#         "bwa_result/{sample}.clean.sam"
+#     log:
+#         "logs/{sample}_filter.log"
+#     shell:
+#         "filterBAM_forHiC.pl {input} {output} 1>{log} 2>&1"
+
+
+# rule pairtools_filter:
+#     input:
+
+
 
 
 rule sam2bam:
     input:
-        "allhic_result/{sample}.clean.sam"
+        "bwa_result/{sample}.clean.sam"
     output:
-        "allhic_result/{sample}.clean.bam"
+        "bwa_result/{sample}.clean.bam"
     log:
-
+        "logs/{sample}.sam2bam.log"
     threads: ncpus
     shell:
-        "samtools view -@ {threads} -bt {FA}.fai {input} > {output}"
+        "samtools view -@ {threads} -bt {FA}.fai {input} > {output} 2>{log}"
+
+rule merge_bam:
+    input:
+        bam = expand("bwa_result/{sample}.clean.bam", sample=SAMPLES)
+    output:
+        expand("allhic_result/{name}.merged.bam", name=config['sample'])
+    log:
+        expand("logs/{name}.merged.log", name=config['sample'])
+    threads: ncpus
+    shell:
+        "samtools merge -@ {threads} {output} {input.bam} 1>{log} 2>&1"
+
 
 rule partition:
     input:
-        lambda wildcards: "allhic_result/{}.clean.bam".format(SAMPLE)
+        lambda wildcards: "allhic_result/{}.merged.bam".format(SAMPLE)
     output:
-        expand("allhic_result/{sample}.clean.counts_{enzyme_base}.{N}g{n}.txt",
+        expand("allhic_result/{sample}.merged.counts_{enzyme_base}.{N}g{n}.txt",
             sample=(SAMPLE,), enzyme_base=(enzyme_base,), N=(N,), n=range(1,N+1))
     log:
         "logs/{}_partition.log".format(SAMPLE)
@@ -154,13 +148,13 @@ rule partition:
 
 rule extract:
     input:
-        bam = "allhic_result/{sample}.clean.bam",
+        bam = "allhic_result/{sample}.merged.bam",
         #txt = "allhic_result/{sample}.clusters.txt"
-        txt = expand("allhic_result/{sample}.clean.counts_{enzyme_base}.{N}g{n}.txt",
+        txt = expand("allhic_result/{sample}.merged.counts_{enzyme_base}.{N}g{n}.txt",
             sample=(SAMPLE,), enzyme_base=(enzyme_base,), N=(N,), n=range(1,N+1))
 
     output:
-        "allhic_result/{sample}.clean.clm",
+        "allhic_result/{sample}.merged.clm",
     log:
         "logs/{sample}_extract.log"
     shell:
@@ -168,10 +162,10 @@ rule extract:
 
 rule optimize:
     input:
-        clm = "allhic_result/{sample}.clean.clm",
-        txt = "allhic_result/{sample}.clean.counts_{enzyme_base}.{N}g{n}.txt"
+        clm = "allhic_result/{sample}.merged.clm",
+        txt = "allhic_result/{sample}.merged.counts_{enzyme_base}.{N}g{n}.txt"
     output:
-        "allhic_result/{sample}.clean.counts_{enzyme_base}.{N}g{n}.tour"
+        "allhic_result/{sample}.merged.counts_{enzyme_base}.{N}g{n}.tour"
     log:
         "logs/{sample}_{enzyme_base}.{N}g{n}_optimize.log"
     shell:
@@ -179,7 +173,7 @@ rule optimize:
 
 rule build:
     input:
-        expand("allhic_result/{sample}.clean.counts_{enzyme_base}.{N}g{n}.tour",
+        expand("allhic_result/{sample}.merged.counts_{enzyme_base}.{N}g{n}.tour",
             sample=(SAMPLE,), enzyme_base=(enzyme_base,), N=(N,), n=range(1,N+1))
     output:
         "allhic_result/groups.asm.fasta"

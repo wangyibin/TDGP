@@ -1,27 +1,30 @@
-
+## configure file of allhic snakemake pipeline
+## contig level fasta file
 genome:
-        tig.fasta
+        contig.fasta
 
+## output file prefix
 sample:
-        - AD
-
+        - AP85
+## threads of program
 ncpus:
-        20
+        12
 
+## restriction enzyme of Hi-C ["HindII", "MboI"]
 enzyme:
-        HINDIII
+        HindIII
 
+## number of cluster group
 cluster_N:
-        1
-
-
-
-
+        8
+## bin sizes for heatmap plotting
+bin_sizes:
+        - "150K"
+        - "500K"
+## tag for fastq file 
 tag:
         - R1
         - R2
-
+## suffix for fastq file
 fq_suffix:
-        fq.gz
-
-
+        fastq.gz

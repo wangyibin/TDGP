@@ -1,0 +1,93 @@
+#!/usr/bin/env python
+
+import argparse
+import logging
+import os.path as op
+import os
+import sys
+
+
+def ALLHiC_Pipeline(args):
+    """
+    %(prog)s [Options]
+    """
+    p = p=argparse.ArgumentParser(prog=ALLHiC_Pipeline.__name__,
+                        description=ALLHiC_Pipeline.__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('-i', '--fasta', 
+            help='contig fasta', required=True)
+    pReq.add_argument('-c', '--clusterN', type=int, 
+            help='cluster number', required=True)
+    pOpt.add_argument('-s', '--sample', default='sample',
+            help='sample name for output prefix [default: %(default)s]')
+    pOpt.add_argument('--enzyme', default='HindIII',
+            choices=['HindIII', 'MboI'],
+            help='restriction enzyme of Hi-C [default: %(default)s]')
+    pOpt.add_argument('--jobs', default="",
+            help='Use at most N cores in parallel. default is using availabel cores')
+    pOpt.add_argument('--cluster', default='qsub -j oe -q workq -l select=1:ncpus={threads}',
+            help='cluster command ofr snakemake [default: %(default)s]')
+    pOpt.add_argument('-t', '--thread', default=12, type=int,
+            help='thread number of program [default: %(default)s]')
+    pOpt.add_argument('--tag', nargs=2, default=['R1', 'R2'],
+            help='tag of fastq file [default: R1 R2]')
+    pOpt.add_argument('--fq_suffix', default='fastq.gz', 
+            help='suffix of fastq file [default: %(default)s]')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    
+    args = p.parse_args(args)
+    configure = """
+## configure file of allhic snakemake pipeline
+## contig level fasta file
+genome:
+        {genome}\n
+## output file prefix
+sample:
+        - {sample}
+## threads of program
+ncpus:
+        {ncpus}\n
+## restriction enzyme of Hi-C ["HindII", "MboI"]
+enzyme:
+        {enzyme}\n
+## number of cluster group
+cluster_N:
+        {clusterN}\n
+## tag for fastq file 
+tag:
+        - {tag1}
+        - {tag2}
+## suffix for fastq file
+fq_suffix:
+        {fq_suffix}
+"""
+    config = configure.format(genome=args.fasta,
+                    sample=args.sample,
+                    clusterN=args.clusterN,
+                    enzyme=args.enzyme,
+                    tag1=args.tag[0],
+                    tag2=args.tag[1],
+                    ncpus=args.thread,
+                    fq_suffix=args.fq_suffix)
+    # if not op.exists(data):
+    #     logging.error("No such file of `data`, must to prepare fastq file in data directory")
+    #     sys.exit()
+    # if not op.exists(args.fasta):
+    #     logging.error('No such file of `{}`, must to input exist fasta'.format(args.fasta))
+    #     sys.exit()
+    with open('config.yaml', 'w') as out:
+        print(config, file=out)
+    progpath = op.dirname(op.abspath(__file__))
+    snakemake_file = op.join(progpath, 'allhic_diploid_pipelinev2.smk')
+    
+    cluster_cmd = "--cluster '{}'".format(args.cluster) if args.cluster else ""
+    
+    os.system('snakemake -j {} -s {} --configfile {} {}'.format(
+                args.jobs, snakemake_file, 'config.yaml', cluster_cmd
+    ))
+    
+if __name__ == "__main__":
+    ALLHiC_Pipeline(sys.argv[1:])
