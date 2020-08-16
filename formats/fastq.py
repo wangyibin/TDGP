@@ -53,12 +53,12 @@ def splitfastq(infile, outdir, nreads):
     if infile.endswith('.gz'):
         prefix = re.sub('((.fastq)|(.fq)).gz', '_part', 
                 op.join(outdir, op.basename(infile)))
-        cmd = 'zcat {} | split -l {} -d - {}'.format(
+        cmd = 'zcat {} | split -a 3 -l {} -d - {}'.format(
                 infile, nlines, prefix)
     else:
         prefix = re.sub('((.fastq)|(.fq))', '_part',
                 op.join(outdir, op.basename(infile)))
-        cmd = 'split -l {} -d {} {}'.format(
+        cmd = 'split -a 3 -l {} -d {} {}'.format(
                 nlines, infile, prefix)
 
     retcode = subprocess.call(cmd, shell=True)
@@ -72,12 +72,12 @@ def splitfastq(infile, outdir, nreads):
     for i in files:
         shutil.move(i, op.join(
                 op.dirname(i),
-                op.basename(i)[-2:] + "_" +
-                op.basename(i)[:-7] + ".fastq"))
+                op.basename(i)[-3:] + "_" +
+                op.basename(i)[:-8] + ".fastq"))
         res.append(op.join(
                 op.dirname(i),
-                op.basename(i)[-2:] + "_" +
-                op.basename(i)[:-7] + ".fastq"))
+                op.basename(i)[-3:] + "_" +
+                op.basename(i)[:-8] + ".fastq"))
     #res = glob(op.dirname(prefix) + "/*fastq")
     return res
     
@@ -151,7 +151,7 @@ def splitFastq(args):
     res = pool.map(splitfq, task_list)
     res = np.append([], res)
     cmd_func = lambda x: "gzip {0}".format(x)
-    gzip_cmd = 'gzip_cmd.list'
+    gzip_cmd = '{}_gzip_cmd.list'.format(os.getpid())
     with open(gzip_cmd, 'w') as fo:
         print("\n".join(map(cmd_func, res)), file=fo)
     
