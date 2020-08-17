@@ -212,7 +212,7 @@ rule sort_bam:
         expand("logs/{name}.sort_bam.log", name=config['sample'])
     threads: ncpus
     shell:
-        "samtools sort -@ {threads} {input} > {output} 2 > {log}"
+        "samtools sort -@ {threads} {input} -o {output} 2>{log}"
 
 rule bam_index:
     input:
