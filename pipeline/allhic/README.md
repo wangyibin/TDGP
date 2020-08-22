@@ -59,5 +59,5 @@ ln -s *fastq.gz .
 ```
 - execute snakemake in command line or submit into cluster
 ```bash
-snakemake -j 12 -s allhic_diploid_pipeline.smk --configfile config_allhic_diploid_pipeline.yaml --cluster "qsub -l select=1:ncpus={thread} -q workq -j oe"
+snakemake -j 12 -s allhic_diploid_pipeline.smk --configfile config_allhic_diploid_pipeline.yaml --cluster "qsub -l select=1:ncpus={threads} -q workq -j oe"
 ```
