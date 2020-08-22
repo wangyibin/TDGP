@@ -51,7 +51,6 @@ def rename_gff_attribute(ingff, inlist):
                     
                             
                 
-
             print(output, file=sys.stdout)
 
 

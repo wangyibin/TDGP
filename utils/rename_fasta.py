@@ -23,7 +23,7 @@ def rename_fasta(infasta,rename_list, outfasta):
 
 if __name__ == "__main__":
     if len(sys.argv) < 4:
-        print("Usage: {} <in.fasta> <rename.list> <out.fasta>".format(sys.argv[0]))
+        print("Usage: {} <in.fasta> <rename.list> <out.fasta>".format(op.basename(sys.argv[0])))
         sys.exit()
     infasta, rename_list, outfasta = sys.argv[1:]
     rename_fasta(infasta, rename_list, outfasta)

@@ -1071,7 +1071,7 @@ def quickPlotTAD(args):
     cf.set('tad', 'display', 'triangles')
     cf.set('tad', 'border_color', 'black')
     cf.set('tad', 'color', 'none')
-    cf.set('tad', 'overlay_previous', 'share-y')
+    cf.set('tad', 'overlay_previous', 'yes')
 
     
     if args.bg:

@@ -1,7 +1,14 @@
 ## **snakemake pipeline for run ALLHiC diploid assembly**
 
-![](dag.png)
+![](dagv2.png)
 
+- install
+```bash
+export PATH=/path/to/TDGP/bin:/path/to/TDGP/utils:$PATH
+export PATH=/path/to/ALLHiC/bin:/path/to/ALLHiC/scripts:$PATH
+cp /path/to/allhic_diploid_pipeline.smk .
+cp config_allhic_diploid_pipeline.yaml .
+```
 
 - configure
 `vim config_allhic_diploid_pipeline.yaml`
@@ -25,7 +32,10 @@ enzyme:
 ## number of cluster group
 cluster_N:
         8
-
+## bin sizes for heatmap plotting
+bin_sizes:
+        - "150K"
+        - "500K"
 ## tag for fastq file 
 tag:
         - R1

@@ -266,7 +266,7 @@ class ValidPairs(BaseFile):
 
     @classmethod
     def plotDistDensity(self, distance_db, out, perchrom=True, scale=100000,
-            xmin=1e5, xmax=1e8,):# color=[]):
+            xmin=1e5, xmax=1e8, plotSlope=False, slopeRange='500000-7000000'):# color=[]):
         """
         Plot the density of contact distance per chromosome or whole chromosome
         
@@ -299,6 +299,7 @@ class ValidPairs(BaseFile):
                 color_pallete = sns.color_palette('hls', len(distance_db))
         """
         from scipy.stats import linregress
+        slope_left, slope_right = list(map(int, slopeRange.split("-")))
         plt.figure(figsize=(5, 5))
         if perchrom:
             for i, chrom in enumerate(distance_db): 
@@ -315,13 +316,28 @@ class ValidPairs(BaseFile):
             data = list(chain(*list(distance_db.values())))
             data = np.array(data) // scale * scale
             data = data[(data >= xmin) & (data <= xmax)]
+            
             unique, counts = np.unique(data, return_counts=True)
             db = OrderedDict(zip(unique, counts))
-            slope = linregress(np.log10(unique), np.log10(counts)).slope
-            label = 'all'
-            label = "{} ({:.2f})".format(label, slope)
+            slope_data = data[(data >= slope_left) & (data <= slope_right)]
+            slope_unique, slope_counts = np.unique(slope_data, return_counts=True)
+            slope_unique_log, slope_counts_log = np.log10(slope_unique), np.log10(slope_counts)
+            slope, intercept, rvalue, pvalue, stderr = linregress(slope_unique_log, 
+                                                                slope_counts_log)
+            label = 'Intrachromosomal'
+            if plotSlope:
+                label = "{}".format(label)
+            else:
+                label = "{} ({:.2f})".format(label, slope)
+            
             plt.plot(list(db.keys()), list(db.values()), 
                 label=label)#, color=single_color)
+            
+            if plotSlope:
+                slope_x_values = slope_unique
+                slope_y_values = 10 ** (slope_unique_log * slope + intercept)
+                slope_label = "{:.2f}".format(slope)
+                plt.plot(slope_x_values, slope_y_values, "--", label=slope_label, lw=2)
             plt.legend(loc='best', fontsize=14)
         #plt.xlim(xmin, xmax)
         plt.ylabel('Contact probability', fontsize=14)
@@ -332,7 +348,6 @@ class ValidPairs(BaseFile):
         plt.savefig(out.rsplit(".", 1)[0] + '.png', 
                     dpi=300, bbox_inches='tight')
         logging.debug('Successful, picture is in `{}`'.format(out))
-
 
 ## outside command ##
 
@@ -370,6 +385,7 @@ def validStat(args):
                             usecols=[0, 1],
                             comment="#")
         return df
+
 
     def get_statfile(path):
         files = glob.glob(path + "/*stat")
@@ -477,6 +493,10 @@ def plotDistDensity(args):
             help='min value of xtick [default: %default]')
     p.add_option('--xmax', default=1e8, type=float, 
             help='max value of xtick [default: %default]')
+    p.add_option('--plotSlope', action='store_true', default=False,
+            help='plotting slope line in picture [default: %default]')
+    p.add_option('--slopeRange', default='500000-7000000', 
+            help='slope range [default: %default]')
     p.add_option('--color', default='', 
             help='color palette')
     opts, args = p.parse_args(args)
@@ -504,10 +524,111 @@ def plotDistDensity(args):
     vp = ValidPairs(pairsFile)
     distance_db = vp.getCisDistance(chrom=chrom)
     vp.plotDistDensity(distance_db, out, perchrom=opts.perchr, scale=opts.scale,
-            xmin=opts.xmin, xmax=opts.xmax) #, color=color)
-
-
+            xmin=opts.xmin, xmax=opts.xmax, plotSlope=opts.plotSlope, 
+            slopeRange=opts.slopeRange) #, color=color)
 def plotIDEMulti(args):
+    """
+    %(prog) 1.ValidPairs 2.ValidPairs ... [Options]
+        To multi sample IDE in a picture.
+    """
+    p = p=argparse.ArgumentParser(prog=plotIDEMulti.__name__,
+                        description=plotIDEMulti.__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('validpairs', nargs="+", 
+            help='validpairs file')
+    pReq.add_argument('--labels', nargs='+', required=True,
+            help='lable for legend')
+    pReq.add_argument('-o', '--out', required=True,
+            help='output file')
+    pOpt.add_argument('--chrom', default=None, help='plot chrom list')
+    pOpt.add_argument('--scale', default=100000, type=int, metavar='int',
+            help='the scale of data [default: %(default)]')
+    pOpt.add_argument('--xmin', default=1e5, type=float, metavar='float',
+            help='min value of xtick [default: %(default)]')
+    pOpt.add_argument('--xmax', default=2e7, type=float, metavar='float',
+            help='max value of xtick [default: %(default)]')
+    pOpt.add_argument('--plotSlope', action='store_true', default=False,
+            help='plotting slope line in picture [default: %(default)s]')
+    pOpt.add_argument('--slopeRange', default='500000-7000000', 
+            help='slope range [default: %(default)s]')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    
+    args = p.parse_args(args)
+
+    from scipy.stats import linregress
+    from matplotlib.lines import Line2D
+    scale = args.scale
+    xmin = args.xmin
+    xmax = args.xmax
+    plotSlope = args.plotSlope
+    slope_range = args.slopeRange
+    slope_left, slope_right = list(map(int, slope_range.split("-")))
+    out = args.out
+    fig, ax = plt.subplots(figsize=(5, 5))
+
+    if args.chrom:
+        if op.exists(args.chrom):
+            chrom = [i.strip().split()[0] 
+                        for i in open(args.chrom) if i.strip()]
+        else:
+            chrom = args.chrom.split(',')
+    else:
+        chrom = args.chrom
+    for i in args.validpairs:
+        check_file_exists(i)
+    assert len(args.validpairs) == len(args.labels), \
+        'input validpair file must equal to labels'
+    i = 0
+    for validpair, label in zip(args.validpairs, args.labels):
+        vp = ValidPairs(validpair)
+        distance_db = vp.getCisDistance(chrom=chrom)
+        data = list(chain(*list(distance_db.values())))
+        data = np.array(data) // scale * scale
+        
+        data = data[(data >= xmin) & (data <= xmax)]
+        unique, counts = np.unique(data, return_counts=True)
+        db = OrderedDict(zip(unique, counts))
+   
+        
+        slope_data = data[(data >= slope_left) & (data <= slope_right)]
+        slope_unique, slope_counts = np.unique(slope_data, return_counts=True)
+        slope_unique_log, slope_counts_log = np.log10(slope_unique), np.log10(slope_counts)
+        slope, intercept, rvalue, pvalue, stderr = linregress(slope_unique_log, 
+                                                                slope_counts_log)
+        if plotSlope:
+            label = "{}".format(label)
+        else:
+            label = "{} ({:.2f})".format(label, slope)
+        plt.plot(list(db.keys()), list(db.values()), label=label)
+        if plotSlope:
+            slope_x_values = slope_unique
+            slope_y_values = 10 ** (slope_unique_log * slope + intercept)
+            slope_label = "{:.2f}".format(slope)
+            plt.plot(slope_x_values, slope_y_values, "--", label=slope_label, lw=2)
+        #sns.regplot(list(db.keys()), list(db.values()), label=label, 
+         #   marker=Line2D.filled_markers[i], ci=0, truncate=True,
+        #    )
+        #i += 1
+        
+
+        
+    plt.legend(loc='best', fontsize=13)
+    #plt.xlim(xmin, xmax)
+    plt.ylabel('Contact probability', dict(size=14))
+    plt.xlabel('Distance (bp)', dict(size=14))
+    plt.yscale('log')
+    plt.xscale('log')
+    #sns.despine(trim=True)
+    plt.savefig(out, dpi=300, bbox_inches='tight')
+    plt.savefig(out.rsplit(".", 1)[0] + '.png', 
+                    dpi=300, bbox_inches='tight')
+
+    logging.debug('Successful, picture is in `{}`'.format(out))
+
+def plotIDEMultiv1(args):
     """
     %(prog) 1.ValidPairs 2.ValidPairs ... [Options]
         To multi sample IDE in a picture.

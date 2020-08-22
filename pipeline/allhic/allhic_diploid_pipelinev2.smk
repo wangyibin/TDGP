@@ -32,7 +32,7 @@ import glob
 import sys
 
 
-__version__ = "v1.0"
+__version__ = "v2.0"
 
 
 enzyme_repo = {"MBOI":"GATC", "HINDIII":"AAGCTT"}
@@ -55,7 +55,7 @@ rule all:
     input:
         # lambda wildcards: "process/{}.bwa_aln.REduced.paired_only.bam".format(config['sample'][0])
         #"allhic_result/groups.asm.fasta"
-        whole_pdf = expand("allhic_results/pdf/{bin_size}_Whole_genome.pdf", bin_size=bin_sizes),
+        whole_pdf = expand("allhic_result/pdf/{bin_size}_Whole_genome.pdf", bin_size=bin_sizes),
         chroms_pdf = expand("allhic_result/pdf/{bin_size}_{sample}.merged.counts_{enzyme_base}.{N}g{n}.pdf",
             bin_size=bin_sizes, sample=(SAMPLE,), enzyme_base=(enzyme_base,), N=(N,), n=range(1,N+1))
 
@@ -201,7 +201,7 @@ rule getSizes:
     output:
         "allhic_result/chrom.sizes"
     shell:
-        "getChrLength.py {input} > {output} 2 > /dev/null"
+        "getChrLength.py {input} | grep -v tig > {output}"
 
 rule sort_bam:
     input:
@@ -232,13 +232,13 @@ rule plot:
         agp = "allhic_result/groups.agp",
         sizes = "allhic_result/chrom.sizes"
     output:
-        whole_pdf = expand("allhic_results/pdf/{bin_size}_Whole_genome.pdf", bin_size=bin_sizes),
+        whole_pdf = expand("allhic_result/pdf/{bin_size}_Whole_genome.pdf", bin_size=bin_sizes),
         chroms_pdf = expand("allhic_result/pdf/{bin_size}_{sample}.merged.counts_{enzyme_base}.{N}g{n}.pdf",
             bin_size=bin_sizes, sample=(SAMPLE,), enzyme_base=(enzyme_base,), N=(N,), n=range(1,N+1))
     params:
         ",".join(bin_sizes)
     threads: ncpus
     shell:
-        "ALLHiC_plot3 {input.bam} {input.agp} {input.sizes} -t {threads} --bin_size {params} && mv {output.whole_pdf} {output.chroms_pdf} pdf"
+        "ALLHiC_plot3 {input.bam} {input.agp} {input.sizes} -t {threads} --bin_size {params} && mv {output.whole_pdf} {output.chroms_pdf} allhic_result/pdf"
 
     

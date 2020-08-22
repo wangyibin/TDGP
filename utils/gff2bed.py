@@ -1,7 +1,4 @@
 #!/usr/bin/env python
-# -*- coding:utf-8 -*-
-
-# @Time: 2019/6/10 9:41
 
 from __future__ import print_function
 
