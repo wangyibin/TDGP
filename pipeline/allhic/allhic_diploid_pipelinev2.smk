@@ -239,6 +239,6 @@ rule plot:
         ",".join(bin_sizes)
     threads: ncpus
     shell:
-        "ALLHiC_plot3 {input.bam} {input.agp} {input.sizes} -t {threads} --bin_size {params} && mv {output.whole_pdf} {output.chroms_pdf} allhic_result/pdf"
+        "ALLHiC_plot3 {input.bam} {input.agp} {input.sizes} -t {threads} --bin_size {params} && mv *.pdf allhic_result/pdf"
 
     

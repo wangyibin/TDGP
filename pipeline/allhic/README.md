@@ -4,10 +4,11 @@
 
 - install
 ```bash
+export PYTHONPATH=/path/to/TDGP:$PYTHONPATH
 export PATH=/path/to/TDGP/bin:/path/to/TDGP/utils:$PATH
 export PATH=/path/to/ALLHiC/bin:/path/to/ALLHiC/scripts:$PATH
 cp /path/to/allhic_diploid_pipeline.smk .
-cp config_allhic_diploid_pipeline.yaml .
+cp /path/to/config_allhic_diploid_pipeline.yaml .
 ```
 - split fastq
 split fastq file to run pipeline of allhic
@@ -37,15 +38,15 @@ enzyme:
 ## number of cluster group
 cluster_N:
         8
-## bin sizes for heatmap plotting
+## bin sizes of heatmap plotting
 bin_sizes:
         - "150K"
         - "500K"
-## tag for fastq file 
+## tag of fastq file 
 tag:
         - R1
         - R2
-## suffix for fastq file
+## suffix of fastq file
 fq_suffix:
         fastq.gz
 ```
@@ -58,6 +59,15 @@ mkdir data && cd data
 ln -s *fastq.gz .
 ```
 - execute snakemake in command line or submit into cluster
-```bash
-snakemake -j 12 -s allhic_diploid_pipeline.smk --configfile config_allhic_diploid_pipeline.yaml --cluster "qsub -l select=1:ncpus={threads} -q workq -j oe"
-```
+        - Torque or PBSPro
+        ```bash
+        snakemake -j 12 -s allhic_diploid_pipeline.smk --configfile config_allhic_diploid_pipeline.yaml --cluster "qsub -l select=1:ncpus={threads} -q workq -j oe"
+        ```
+        - SGE
+        ```bash
+        snakemake -j 12 -s allhic_diploid_pipeline.smk --configfile config_allhic_diploid_pipeline.yaml --cluster "qsub -j oe -pe mpi {threads} -cwd -S /bin/bash"
+        ```
+        - Command line
+        ```bash
+        snakemake -j 12 -s allhic_diploid_pipeline.smk --configfile config_allhic_diploid_pipeline.yaml
+        ```

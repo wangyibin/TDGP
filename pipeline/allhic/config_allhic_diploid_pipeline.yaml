@@ -17,14 +17,14 @@ enzyme:
 ## number of cluster group
 cluster_N:
         8
-## bin sizes for heatmap plotting
+## bin sizes of heatmap plotting
 bin_sizes:
         - "150K"
         - "500K"
-## tag for fastq file 
+## tag of fastq file 
 tag:
         - R1
         - R2
-## suffix for fastq file
+## suffix of fastq file
 fq_suffix:
         fastq.gz
