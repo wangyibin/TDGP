@@ -26,6 +26,7 @@ import matplotlib.pyplot as plt
 
 from collections import defaultdict, OrderedDict
 from joblib import delayed, Memory, Parallel
+
 from TDGP.analysis.genome import Genome
 from TDGP.apps.mathutils import completeIC, observedOverExpected
 from TDGP.apps.base import debug, check_file_exists, listify
@@ -528,7 +529,7 @@ def two_species_conserved_compare(tgy_df, jgy_df, method='length'):
     db = {"AA": 0, "BB": 0, "AB": 0, "BA": 0}
     length_df = tgy_df.end - tgy_df.start
     for i in range(len(tgy_df)):
-        v1, v2 = tgy_df.pca1.iloc[i], jgy_df.pca1.iloc[i]
+        v1, v2 = tgy_df.iloc[i].pca1, jgy_df.iloc[i].pca1
         value = length_df.iloc[i] if method == 'length' else 1
         db[switch_type(v1, v2)] += value
     
@@ -1849,6 +1850,9 @@ def quickPlot(args):
     pOpt.add_argument('-g', '--gene', 
             help='gene density bg file')
     pOpt.add_argument('--TE', help='bg file of TE density')
+    pOpt.add_argument('--RNA', help='bg file of RNA-Seq')
+    pOpt.add_argument('--Retro', help='bg file of Retro-TE density')
+    pOpt.add_argument('--DNA', help='bg file of DNA-TE density')
     pOpt.add_argument('-o', '--outdir', default='quickPlot',
             help='outdir [default: %(default)s]')
     pOpt.add_argument('--pdf', default=False, action='store_true',
@@ -1882,7 +1886,7 @@ def quickPlot(args):
         cf.set('gene', 'max_value', '30')
     
     if args.TE:
-        cf.add_section('spacerTE')
+        cf.add_section('spacer_TE')
         cf.add_section('te')
         cf.set('te', 'file', args.TE)
         cf.set('te', 'color', '#00426D')
@@ -1891,14 +1895,40 @@ def quickPlot(args):
         cf.set('te', 'fontsize', '14')
         #cf.set('gene', 'max_value', '1500')
     
-    
+    if args.RNA:
+        cf.add_section('spacerRNA')
+        cf.add_section('rna')
+        cf.set('rna', 'file', args.RNA)
+        cf.set('rna', 'color', '#00426D')
+        cf.set('rna', 'title', 'mRNA')
+        cf.set('rna', 'height', '3')
+        cf.set('rna', 'fontsize', '14')
+  
+    if args.DNA:
+        cf.add_section('spacerDNA')
+        cf.add_section('dna')
+        cf.set('dna', 'file', args.DNA)
+        cf.set('dna', 'color', '#EDB900')
+        cf.set('dna', 'title', 'DNA-TE Density')
+        cf.set('dna', 'height', '3')
+        cf.set('dna', 'fontsize', '14')
+
+    if args.Retro:
+        cf.add_section('spacerRetro')
+        cf.add_section('retro')
+        cf.set('retro', 'file', args.Retro)
+        cf.set('retro', 'color', '#2E897C')
+        cf.set('retro', 'title', 'Retro-TE Density')
+        cf.set('retro', 'height', '3')
+        cf.set('retro', 'fontsize', '14')
+
     cf.add_section('x-axis')
     if not op.exists(outdir):
         os.makedirs(outdir)
     with open('{}/quickplot.ini'.format(outdir), 'w+') as f:
         cf.write(f)
     
-    os.system("sed -i 's/spacerTE/spacer/g' {}/quickplot.ini".format(outdir))
+    os.system("sed -i 's/\[spacer.*/\[spacer\]/g' {}/quickplot.ini".format(outdir))
 
     chromsizes = dict(i.strip().split() for 
                     i in open(args.chromsizes) 

@@ -8,6 +8,8 @@ import os
 import os.path as op
 import sys
 
+import pandas as pd 
+
 from collections import OrderedDict, defaultdict
 from intervaltree import Interval, IntervalTree
 from TDGP.apps.base import BaseFile
@@ -146,3 +148,11 @@ class BedGraph(BaseFile):
         return self.binRanges 
     
 
+def import_bedgraph(infile):
+    df = pd.read_csv(infile,
+                     sep='\t', 
+                     header=None,
+                     index_col=None, 
+                     names=('chrom', 'start', 
+                            'end', 'score'))
+    return df 

@@ -20,8 +20,8 @@ from math import log2
 
 
 
-def create_trans_db(allpairs):
-    prefix = allpairs.split("_")[0]
+def create_trans_db(allpairs, outdir='./'):
+    prefix = op.basename(allpairs).split(".")[0]
     db2 = defaultdict(lambda : 0)
     db = defaultdict(lambda : db2.copy())
     with open(allpairs) as fp:
@@ -33,7 +33,7 @@ def create_trans_db(allpairs):
                 db[chrom2][chrom1] += 1
     
 
-    json.dump(db, open('{}_trans.json'.format(prefix), 'w'))
+    json.dump(db, open('{}/{}_trans.json'.format(outdir, prefix), 'w'))
 
 
 def cacl_total_trans(chrom_trans_nums, chrom_list):
@@ -59,15 +59,15 @@ def get_chrom_list(chrom_list):
 
 
 
-def get_whole_obs_exp_matrix(allpairs, chrom_list):
-    prefix = allpairs.split("_")[0]
+def get_whole_obs_exp_matrix(allpairs, chrom_list, outdir='./'):
+    prefix = op.basename(allpairs).split(".")[0]
 
-    if not op.exists('{}_trans.json'.format(prefix)):
-        create_trans_db(allpairs)
+    if not op.exists('{}/{}_trans.json'.format(outdir, prefix)):
+        create_trans_db(allpairs, outdir)
     else:
         print('[Warning]: There has already existed'
-                ' `{}_trans.json`, using old json file.'.format(prefix))
-    chrom_trans_nums = json.load(open('{}_trans.json'.format(prefix)))
+                ' `{}/{}_trans.json`, using old json file.'.format(outdir, prefix))
+    chrom_trans_nums = json.load(open('{}/{}_trans.json'.format(outdir, prefix)))
     
     whole_obs_exp_matrix = np.zeros((len(chrom_list), len(chrom_list)))
     total_trans = cacl_total_trans(chrom_trans_nums, chrom_list)
@@ -99,7 +99,7 @@ def merge_matrix(matrix1, matrix2):
 
 def plot_heatmap(whole_obs_exp_matrix, chrom_list, prefix,
         color='coolwarm', valfmt='{x: .3f}', figsize=(10, 10), 
-        vmin=0.2, vmax=-0.2, xlabel='', ylabel=''):
+        vmin=0.2, vmax=-0.2, xlabel='', ylabel='', outdir='./'):
     import matplotlib as mpl
     mpl.use('Agg')
     import matplotlib.pyplot as plt
@@ -129,8 +129,8 @@ def plot_heatmap(whole_obs_exp_matrix, chrom_list, prefix,
             text = ax.text(j, i, valfmt(whole_obs_exp_matrix[i, j], None),
                       ha='center', va='center')
 
-    plt.savefig('{}_whole_chromosome_positions.pdf'.format(prefix), dpi=300)
-    plt.savefig('{}_whole_chromosome_positions.png'.format(prefix), dpi=300)
+    plt.savefig('{}/{}_whole_chromosome_positions.pdf'.format(outdir, prefix), dpi=300)
+    plt.savefig('{}/{}_whole_chromosome_positions.png'.format(outdir, prefix), dpi=300)
 
 
 
@@ -150,6 +150,8 @@ if __name__ == "__main__":
             help='label of x axis [default: %(default)s]')
     pOpt.add_argument('--ylabel', default='',
             help='label of y axis [default: %(default)s]')
+    pOpt.add_argument('--outdir', default='./', 
+            help='output directory of results [default: %(default)s]')
     pOpt.add_argument('--figsize', type=str, default='(10, 10)', 
             help='figsize of picture [default: %(default)s]')
     pOpt.add_argument('-h', '--help', action='help',
@@ -157,19 +159,20 @@ if __name__ == "__main__":
     
     args = p.parse_args()
     chrom_list = get_chrom_list(args.chrom)
+    outdir = args.outdir
     if len(args.infile) == 1: 
         allpairs, = args.infile
-        matrix = get_whole_obs_exp_matrix(allpairs, chrom_list)
-        prefix = allpairs.split(".")[0]
+        matrix = get_whole_obs_exp_matrix(allpairs, chrom_list, outdir)
+        prefix = op.basename(allpairs).split(".")[0]
     elif len(args.infile) == 2:
         allpairs1, allpairs2 = args.infile
-        matrix1 = get_whole_obs_exp_matrix(allpairs1, chrom_list)
-        matrix2 = get_whole_obs_exp_matrix(allpairs2, chrom_list)
+        matrix1 = get_whole_obs_exp_matrix(allpairs1, chrom_list, outdir)
+        matrix2 = get_whole_obs_exp_matrix(allpairs2, chrom_list, outdir)
         matrix = merge_matrix(matrix1, matrix2)
-        prefix = allpairs1.split(".")[0] + "-" + allpairs2.split("_")[0]
+        prefix = op.basename(allpairs1).split(".")[0] + "-" + op.basename(allpairs2).split("_")[0]
     else:
         print('[Error]: infiles number should be 1 or 2')
         sys.exit()
     plot_heatmap(matrix, chrom_list, prefix, vmax=args.vmax, 
             vmin=args.vmin, figsize=eval(args.figsize), 
-            xlabel=args.xlabel, ylabel=args.ylabel)
+            xlabel=args.xlabel, ylabel=args.ylabel, outdir=outdir)

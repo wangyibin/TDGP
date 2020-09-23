@@ -5,20 +5,25 @@
 """
 ploty: my data valization libraries. 
 """
+from __future__ import print_function
+
+import argparse
+import logging
+import os
+import os.path as op
+import sys
 
 import numpy as np
 import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 
-import os
-import os.path as op
-import sys
-
 import pandas as pd
 import seaborn as sns
 from scipy.stats import linregress
 from matplotlib.lines import Line2D
+
+from TDGP.apps.base import listify
 
 def main():
 
@@ -62,6 +67,92 @@ def change_width(ax, new_value) :
         patch.set_x(patch.get_x() + diff * .5)
 
 
+def trim_axes(axes, N):
+    """
+    little helper to message the axs list to have correct length...
+
+    Params:
+    --------
+    axes: `list`
+            list of axes
+    N: `int`
+            number of axes to return
+    
+    Returns:
+    --------
+    axes: `list`
+            list of trimed axes
+    
+    Examples:
+    --------
+    >>> fig, axes = plt.subplots(5, 2)
+    >>> axes = trim_axes(axes, 7)
+    array([<matplotlib.axes._subplots.AxesSubplot object at 0x7f5f48365198>,
+       <matplotlib.axes._subplots.AxesSubplot object at 0x7f5f49275438>,
+       <matplotlib.axes._subplots.AxesSubplot object at 0x7f5f4712e320>, ...]
+    """
+
+    axes = axes.flat
+    for ax in axes[N:]:
+        ax.remove()
+    
+    return axes[:N]
+
+
+def savefig(figname, dpi=300, bbox_inches=None,
+            formats=['pdf', 'png'], cleanup=True):
+    """
+    function for savefig, can save multi format
+
+    Params:
+    -------
+    figname: `str`
+            figname
+    dpi: `int`
+            dpi for figure [default: 300]
+    formats: `list` or `str`
+            picture formats [default: ["pdf", "png"]]
+    bbox_inches: `str`
+            bbox_inches params for plt.savefig [defult: None]
+    cleanup: `bool`
+            if cleanup rcParms after savefig [default: True]
+    
+    Returns:
+    --------
+    out: output figure
+
+    Examples:
+    --------
+    >>> savefig('out')
+    
+    """
+    formats = listify(formats)
+
+    try:
+        if not op.splitext(figname)[-1]:
+            raise
+        else:
+            fmt = op.splitext(figname)[-1].lower()
+    except:
+        fmt = "pdf"
+    if fmt not in formats:
+        formats.append(fmt)
+    
+    for fmt in formats:
+        figprefix = op.splitext(figname)[0]
+        outname = "{}.{}".format(figprefix, fmt)
+        plt.savefig(outname, dpi=dpi, format=fmt, 
+                bbox_inches=bbox_inches)
+        msg = "Figure saved to `{}`".format(outname)
+        logging.debug(msg)
+    
+    ## reset rcParams after savefig
+    if cleanup:
+        plt.rcdefaults()
+
+
+    
+
 def plotLineRegress(ax, xdata, ydata, 
                     xlabel='species1', 
                     ylabel='species2', 
@@ -95,8 +186,8 @@ def plotLineRegress(ax, xdata, ydata,
             scatter_kws=scatter_params, line_kws=line_params)
     legend_elements = [Line2D([0], [0], **line_params)]
     #ax.set_title('The regression of PC1')
-    ax.set_xlabel("{}".format(xlabel), fontsize=12)
-    ax.set_ylabel("{}".format(ylabel), fontsize=12)
+    ax.set_xlabel("{}".format(xlabel), fontsize=13)
+    ax.set_ylabel("{}".format(ylabel), fontsize=13)
     ax.legend(legend_elements, label, loc='best')
             #bbox_to_anchor=(1, 0.5))
     #ax.xaxis.set_major_locator(plt.MaxNLocator(5))

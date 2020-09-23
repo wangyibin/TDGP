@@ -77,8 +77,8 @@ def plot(ax, df,
     
     
     plt.legend()
-    plt.savefig(output, bbox_inches='tight')
-    plt.savefig(output.rsplit('.', 1)[0] + '.png', bbox_inches='tight')
+    plt.savefig(output, dpi=300, bbox_inches='tight')
+    plt.savefig(output.rsplit('.', 1)[0] + '.png', dpi=300, bbox_inches='tight')
 
 def main(args):
     """

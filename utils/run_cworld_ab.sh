@@ -7,18 +7,22 @@ genome=$3
 chromsizes=$4
 outdir=$5
 thread=$6
-TE_DATA=$7
-
+RNA_DATA=$7
+#TE DATA BED FILE
+TE_DATA=$8
+if [[ -z $bed || -z $matrix || -z $genome || -z $chromsizes ]];then
+        echo
+        echo "Usage: `basename $0` rice_100000_abs.bed rice_100000_iced.matrix rice chrom.sizes"
+        echo "Usage: `basename $0` rice_100000_abs.bed rice_100000_iced.matrix rice chrom.sizes outdir thread RNA_DATA TE_DATA"
+        echo "      TE_DATA: four column bed forth column is the type of TE: LTR DNA...."
+        echo "      RNA_DATA: bam file of RNA-Seq"
+        exit;
+fi
 resolution=`basename $matrix | perl -lne '/_(\d+)[_.]/ && print $1'`
 RES_FILE_NAME=`basename ${bed} | sed 's/_abs.bed//g' | sed "s/_${resulotion}//g"`
 name=`basename ${bed} | sed 's/_abs.bed//g'`
 prefix=`basename ${matrix} | sed 's/.matrix//g'`
-if [[ -z $bed || -z $matrix || -z $genome || -z $chromsizes ]];then
-        echo
-        echo "Usage: `basename $0` rice_100000_abs.bed rice_100000_iced.matrix rice chrom.sizes"
-        echo "Usage: `basename $0` rice_100000_abs.bed rice_100000_iced.matrix rice chrom.sizes outdir thread TE_DATA"
-        exit;
-fi
+
 
 if [[ -z $outdir ]]; then
         outdir="./"
@@ -79,16 +83,40 @@ mergeBedGraph(){
 }
 
 
+RNA_analysis(){
+        local rna_data=$1
+        echo "Staring analysis the RNA-Seq data"
+        rna_name=`basename ${rna_data}`
+        bigwig=${rna_name%.bam}_RNA_${resolution}.bw
+        bedgraph=${bigwig%.bw}.bg
+        bamCoverage -p ${thread} -b ${rna_data} --normalizeUsing RPKM -bs ${resolution} -o ${outdir}/${bigwig}
+        bigWigToBedGraph ${outdir}/${bigwig} ${outdir}/${bedgraph}
+        bedtools intersect -a ${outdir}/${prefix}_all_eigen1.bg -b ${outdir}/${bedgraph} -wao | awk '{print $1,$2,$3,$4,$8}' OFS='\t'> ${outdir}/${prefix}_all_eigen1_RNA_density.bg
+        cut -f 1-3,5 ${outdir}/${prefix}_all_eigen1_RNA_density.bg > ${outdir}/${prefix}_RNA_density.bg
+        python -c "import pandas as pd;import numpy as np;df=pd.read_csv('${outdir}/${prefix}_RNA_density.bg', sep='\t',header=None, index_col=None);df[3] = np.log1p(df[3]); df.to_csv('${outdir}/${prefix}_RNA_log1p_density.bg', header=None,index=None, sep='\t');"
+        bedGraphToBigWig ${outdir}/${prefix}_RNA_log1p_density.bg ${chromsizes} ${outdir}/${prefix}_RNA_log1p_density.bw 
+        ab_boxplot.py ${outdir}/${prefix}_all_eigen1_RNA_density.bg --xlabel 'RNA' --ylabel 'RPKM' -o ${outdir}/${prefix}_all_eigen1_RNA_density_barplot.pdf
+        ab_dotplot.py ${outdir}/${prefix}_all_eigen1_RNA_density.bg --log1p --topA 10 --topB 10  --title 'RNA' --xlabel 'PC1' --ylabel 'RPKM' -o ${outdir}/${prefix}_all_eigen1_RNA_density_dotplot.pdf
+}
 TE_analysis(){
         local te_data=$1
         echo "Starting analysis the TE density"
         #bedtools makewindows -g ${chromsizes} -w ${bsize} > ${outdir}/${RES_FILE_NAME}_${bsize}.window && \
         #bedtools intersect -a ${outdir}/${RES_FILE_NAME}_${bsize}.window -b ${te_data} -c > ${outdir}/${RES_FILE_NAME}_${bsize}_TE.bg
-        bedtools intersect -a ${outdir}/${prefix}_all_eigen1.bg -b ${te_data} -c > ${outdir}/${prefix}_all_eigen1_TE_density.bg && \
-        cut -f 1-3,5 ${outdir}/${prefix}_all_eigen1_TE_density.bg > ${outdir}/${prefix}_TE_density.bg && \
-        bedGraphToBigWig ${outdir}/${prefix}_TE_density.bg ${chromsizes} ${outdir}/${prefix}_TE_density.bw
-        ab_boxplot.py ${outdir}/${prefix}_all_eigen1_TE_density.bg --xlabel 'TE' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_TE_density.pdf
-        ab_dotplot.py ${outdir}/${prefix}_all_eigen1_gene_density.bg --xlabel 'TE' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_TE_density_dotplot.pdf
+        te_name=`basename ${te_data}`
+        egrep "LTR|LINE|SINE" ${te_data} > ${outdir}/${te_name%.bed}.Retro.bed
+        egrep "DNA|RC" ${te_data} > ${outdir}/${te_name%.bed}.DNA.bed
+        bedtools intersect -a ${outdir}/${prefix}_all_eigen1.bg -b ${outdir}/${te_name%.bed}.Retro.bed -c > ${outdir}/${prefix}_all_eigen1_Retro_density.bg && \
+        cut -f 1-3,5 ${outdir}/${prefix}_all_eigen1_Retro_density.bg > ${outdir}/${prefix}_Retro_density.bg && \
+        bedGraphToBigWig ${outdir}/${prefix}_Retro_density.bg ${chromsizes} ${outdir}/${prefix}_Retro_density.bw
+        ab_boxplot.py ${outdir}/${prefix}_all_eigen1_Retro_density.bg --xlabel 'Retro-TE' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_Retro_density_barplot.pdf
+        ab_dotplot.py ${outdir}/${prefix}_all_eigen1_Retro_density.bg --title 'Retro-TE' --xlabel 'PC1' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_Retro_density_dotplot.pdf
+
+        bedtools intersect -a ${outdir}/${prefix}_all_eigen1.bg -b ${outdir}/${te_name%.bed}.DNA.bed -c > ${outdir}/${prefix}_all_eigen1_DNA_density.bg && \
+        cut -f 1-3,5 ${outdir}/${prefix}_all_eigen1_DNA_density.bg > ${outdir}/${prefix}_DNA_density.bg && \
+        bedGraphToBigWig ${outdir}/${prefix}_DNA_density.bg ${chromsizes} ${outdir}/${prefix}_DNA_density.bw
+        ab_boxplot.py ${outdir}/${prefix}_all_eigen1_DNA_density.bg --xlabel 'DNA-TE' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_DNA_density_barplot.pdf
+        ab_dotplot.py ${outdir}/${prefix}_all_eigen1_DNA_density.bg --title 'DNA-TE' --xlabel 'PC1' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_DNA_density_dotplot.pdf
         echo "TE analysis done"
 }
 
@@ -98,12 +126,9 @@ GENE_analysis(){
         cut -f 1-3,5 ${outdir}/${prefix}_all_eigen1_gene_density.bg > ${outdir}/${prefix}_gene_density.bg && \
         bedGraphToBigWig ${outdir}/${prefix}_gene_density.bg ${chromsizes} ${outdir}/${prefix}_gene_density.bw
         ab_boxplot.py ${outdir}/${prefix}_all_eigen1_gene_density.bg --xlabel 'Gene' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_gene_density.pdf &
-        ab_dotplot.py ${outdir}/${prefix}_all_eigen1_gene_density.bg --xlabel 'Gene' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_gene_density_dotplot.pdf
+        ab_dotplot.py ${outdir}/${prefix}_all_eigen1_gene_density.bg --title 'Gene' --xlabel 'PC1' --ylabel 'Count' -o ${outdir}/${prefix}_all_eigen1_gene_density_dotplot.pdf
         echo "Gene analysis done"
 }
-
-
-
 
 mkdir -p ${outdir}/cworld_results
 
@@ -115,12 +140,17 @@ matrix2compartment
 mergeBedGraph
 GENE_analysis &
 
+if [[ -e ${RNA_DATA} ]]; then
+RNA_analysis ${RNA_DATA} &
+RNA_suffix="--RNA ${outdir}/${prefix}_RNA_density.bg"
+fi
+
 if [[ -e ${TE_DATA} ]]; then
 TE_analysis ${TE_DATA} &  
-TE_suffix="--TE ${outdir}/${prefix}_TE_density.bg"   
+TE_suffix="--Retro ${outdir}/${prefix}_Retro_density.bg --DNA ${outdir}/${prefix}_DNA_density.bg"   
 fi
 wait
 
-python -m TDGP.analysis.ab quickPlot ${outdir}/${prefix}_all_eigen1.bg $chromsizes -g ${outdir}/${prefix}_all_eigen1_gene_density.bg  ${TE_suffix} -o ${outdir}/quickPlot | parallel -j ${thread} {} &
-
-wait
+python -m TDGP.analysis.ab quickPlot ${outdir}/${prefix}_all_eigen1.bg $chromsizes \
+        -g ${outdir}/${prefix}_all_eigen1_gene_density.bg  ${TE_suffix} ${RNA_suffix} \
+        -o ${outdir}/quickPlot | parallel -j ${thread} {}

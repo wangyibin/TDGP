@@ -101,7 +101,7 @@ def bam2links(args):
                 logging.info('Parse {} reads'.format(count))
 
     else:
-        logging.info('Done...Outpue {} pairs in {}'.format(
+        logging.info('Done...Output {} pairs in {}'.format(
             links_num, args.output.name))
 
 

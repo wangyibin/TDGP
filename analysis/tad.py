@@ -760,6 +760,7 @@ def plotSizeDist(args):
     ax.set_ylabel('Frequency', fontsize=13)
     ax.set_title('TADs Size Distribution', fontsize=14)
     plt.savefig(out, dpi=300, bbox_inches='tight')
+    plt.savefig(out.rsplit(".", 1)[0] + ".png", dpi=300, bbox_inches='tight')
     logging.debug('Success file is save as {}'.format(out))
 
 
@@ -1071,7 +1072,7 @@ def quickPlotTAD(args):
     cf.set('tad', 'display', 'triangles')
     cf.set('tad', 'border_color', 'black')
     cf.set('tad', 'color', 'none')
-    cf.set('tad', 'overlay_previous', 'yes')
+    cf.set('tad', 'overlay_previous', 'share-y')
 
     
     if args.bg:
@@ -1092,14 +1093,15 @@ def quickPlotTAD(args):
         cf.write(f)
     
     chrom_windows_db = makeChromWindows(args.chrom_size, args.window)
-    plot_cmd_formatter = "pyGenomeTracks --tracks {1}/quickPlotTAD.tad.ini -o {1}/{0}.{2} --region {0}"
+    plot_cmd_formatter = "pyGenomeTracks --tracks {1}/quickPlotTAD.tad.ini -o {1}/{3}.{2} --region {0}"
     
     ext = 'pdf' if args.pdf else 'png'
     
     for chrom in chrom_windows_db:
         for (start, end) in chrom_windows_db[chrom]:
             region = '{}:{}-{}'.format(chrom, start, end)
-            print(plot_cmd_formatter.format(region, args.outdir, ext),
+            outprefix = '{}-{}-{}'.format(chrom, start, end)
+            print(plot_cmd_formatter.format(region, args.outdir, ext, outprefix),
                     file=sys.stdout)
     
 

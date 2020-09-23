@@ -92,10 +92,10 @@ hitad_command = hitad_command + "\ncooler dump -t bins ${outdir}/${matrix%%.matr
 hitad_command = hitad_command + "\ncooler dump -t chroms ${outdir}/${matrix%%.matrix}.cool > ${outdir}/${matrix%%.matrix}.chromsizes"
 hitad_command = hitad_command + "\ncut -f 1-3 ${outdir}/${matrix%%.matrix}.hitad_out.merged.txt > ${outdir}/${matrix%%.matrix}.hitad.domain"
 hitad_command = hitad_command + "\npython -m TDGP.analysis.tad quickPlotTAD ${outdir}/${matrix%%.matrix}.cool "
-hitad_command = hitad_command + "${outdir}/${matrix%%.matrix}.hitad.domain ${outdir}/${matrix%%.matrix}.chromsizes -o ${outdir} | parallel -j $ncpu {}"
+hitad_command = hitad_command + "${outdir}/${matrix%%.matrix}.hitad.domain ${outdir}/${matrix%%.matrix}.chromsizes -o ${outdir}/quickTADPlot_results/ | parallel -j $ncpu {}"
 #hitad_command = hitad_command + "\nsort -k1,1 -k2,2n ${matrix%%.matrix}_DI.bg > ${matrix%%.matrix}_DI.sorted.bg"
 #hitad_command = hitad_commdan + "\nbedGraphToBigWig ${matrix%%.matrix}_DI.sorted.bg "
-hitad_command = hitad_command + "\npython -m TDGP.analysis.tad plotSizeDist ${outdir}/${matrix%%.matrix}.hitad_out.merged.txt --bg ${outdir}/${matrix%%.matrix}_DI.bg -o ${outdir}/quickTADPlot_results/${matrix%%.matrix}.hitad_out.merged.pdf"
+hitad_command = hitad_command + "\npython -m TDGP.analysis.tad plotSizeDist ${outdir}/${matrix%%.matrix}.hitad_out.merged.txt -o ${outdir}/${matrix%%.matrix}.hitad_out.merged_dist.pdf"
 
 with open('run_{}.sh'.format(op.basename(matrix).replace('.matrix', '')), 'w') as f_out:
     f_out.write(header + out_prefix + out + hitad_command)
@@ -104,3 +104,4 @@ if opts.no_qsub:
     os.system('sed -i "s/cd $PBS_O_WORKDIR//" {}'.format(matrix.replace('.matrix', '')))
     os.system('qsub {}'.format('run_{}.sh'.format(matrix.replace('.matrix', ''))))
 
+ 

@@ -33,7 +33,8 @@ from TDGP.apps.base import ActionDispatcher
 from TDGP.apps.base import check_file_exists, debug
 from TDGP.apps.base import listify
 from TDGP.apps.base import BaseFile
-from TDGP.formats.hicmatrix import cool2matrix
+from TDGP.formats.bedGraph import import_bedgraph
+from TDGP.formats.hicmatrix import cool2matrix, getCisCounts, getTransCounts
 
 
 debug()
@@ -84,8 +85,8 @@ class ValidPairsLine(object):
         
         Returns:
         ---------
-        out: bool
-        True or False of pairs whether is Cis.
+        out: `bool`,
+            True or False of pairs whether is Cis.
         
         Examples:
         ----------
@@ -103,7 +104,7 @@ class ValidPairsLine(object):
         
         Returns:
         ---------
-        out: bool
+        out: `bool`,
         True or False of pairs whether is trans.
         
         Examples:
@@ -273,7 +274,9 @@ class ValidPairs(BaseFile):
         Params:
         --------
         distance_db: `dict` or per chromosome distance
+
         perchrom: `bool` default=True
+
         scale: `int` default=100000
         
         Returns:
@@ -348,6 +351,128 @@ class ValidPairs(BaseFile):
         plt.savefig(out.rsplit(".", 1)[0] + '.png', 
                     dpi=300, bbox_inches='tight')
         logging.debug('Successful, picture is in `{}`'.format(out))
+
+def getCisTransData(cool, sample='sample'):
+    """
+    get cis/trans ratio per chromosome
+    
+    Params:
+    --------
+    cool: `str`
+            path of cool file
+
+    sample: `str`, optional
+            label of cool file, also show in barplot
+    
+    Returns:
+    --------
+    data: `DataFrame`
+    
+    Examples:
+    ---------
+    >>> cool = '/path/to/sample.cool'
+    >>> sample = 'sample'
+    >>> data = getCisTransData(cool, sample)
+    """
+    prefix = op.splitext(cool)[0] 
+    cis_bg_file = prefix + ".cis.bg"
+    trans_bg_file = prefix + ".trans.bg"
+    getCisCounts([cool, '-o', cis_bg_file])
+    cis_bg = import_bedgraph(cis_bg_file)
+    getTransCounts([cool, '-o', trans_bg_file])
+    trans_bg = import_bedgraph(trans_bg_file)
+    data = cis_bg.groupby('chrom').score.sum() / trans_bg.groupby('chrom').score.sum()
+    data = data.to_frame()
+    data.reset_index(inplace=True)
+    data['sample'] = sample
+    return data
+
+
+def concatCisTransData(cools, samples):
+    """
+    concat cis/trans data from cools file
+    
+    Params:
+    --------
+    cools: `list`
+            cool file path list
+
+    sampels: `list`
+            label of barplot
+    
+    Returns:
+    --------
+    data: `DataFrame`
+            data of cis/trans ratio per chromosome
+    
+    Examples:
+    ---------
+    >>> cools = ['sample.cool', 'sample2.cool']
+    >>> samples = ['sample', 'sample2']
+    >>> data = concatCisTransData(cools, samples)
+    
+    """
+    cool_dict = dict(zip(samples, cools))
+    data_list = []
+    for sample in cool_dict:
+        data_list.append(getCisTransData(cool_dict[sample], sample))
+    data = pd.concat(data_list, axis=0)
+    return data
+
+def plotCisTransPerChrom(data, rotation=True, 
+                            legend=True, colors=None):
+    """
+    barplot of cis/trans ratio.
+    
+    Params:
+    --------
+    data: `DataFrame`
+            from getCisTransData or concatCisTransData
+
+    rotation: `bool`, optional
+            wether rotation xticks [default: True]
+
+    legend: `bool`, optional
+            wether show legend [default: True]
+
+    colors: `list`, optional
+            color list for par plot per sample [default: None]
+    
+    Returns:
+    ---------
+    ax: `axes`
+    
+    Examples:
+    ---------
+    >>> data = getCisTransData(cool)
+    >>> plotCisTransPerChrom(data)
+    
+    """
+    rotation = 45 if rotation else 0
+    if colors:
+        ax = sns.barplot(x='chrom', y='score', data=data, 
+                         hue='sample', pallete=colors)
+    else:
+        ax = sns.barplot(x='chrom', y='score', data=data, 
+                         hue='sample')
+    
+    ax.tick_params(axis='x', rotation=0)
+    ax.set_ylim(0, data.score.max() * 1.4)
+    ax.set_xlabel('')
+    ax.set_ylabel('$\mathit{{cis}}$ / $\mathit{{trans}}$', 
+                  fontsize=14)
+
+    ax.tick_params(which='major', axis='y', labelsize=13, width=2)
+    ax.tick_params(which='major', axis='x', labelsize=13, width=0)
+    ax.spines['left'].set_linewidth(2)
+    ax.spines['bottom'].set_linewidth(0)
+    sns.despine(trim=True)
+    if legend:
+        plt.legend()
+    else:
+        plt.legend([],[], frameon=False)
+
+    return ax
 
 ## outside command ##
 
@@ -721,10 +846,21 @@ def plotCisTrans(args):
     pOpt = p.add_argument_group('Optional arguments')
     pReq.add_argument('cool', nargs='+', 
             help='cool file of hicmatrix')
+    pOpt.add_argument('--sample', nargs='+',
+            help='sample name of each cool file [default: coolprefix]', )
+    pOpt.add_argument('--perchr', action='store_true', default=False,
+            help='plot cis/trans ration per chromosome [default: %(default)]')
+    pOpt.add_argument('--hideLegend', action='store_true', default=False, 
+            help='hide legend label [default: %(default)s]')
+    pOpt.add_argument('--colors', nargs="*", default=None,
+            help='colors of bar [default: %(default)s]')
+    pOpt.add_argument('-o', '--outprefix', default='out',
+            help='out prefix of output picture and result [default: %(default)]')
     pOpt.add_argument('-h', '--help', action='help',
             help='show help message and exit.')
     
     args = p.parse_args(args)
+    outprefix = args.outprefix
     cis_list = []
     trans_list = []
     for coolfile in args.cool:
@@ -748,10 +884,59 @@ def plotCisTrans(args):
         counts = counts / 2
         trans_list.append(int(counts.sum()))
         #print(counts.sum())
+    if len(cis_list) == 1 and len(trans_list) == 1:
+        cis, trans = cis_list[0], trans_list[0]
+        fig, ax = plt.subplots(figsize=(2.8, 4))
+        ax.bar([1.1, 2], [cis, trans], width=.6, align='center',
+            color=['#ffa040', '#55a0fb'], edgecolor='#606060',
+            linewidth=2)
+        ax.set_xticks([1, 2])
+        ax.set_xlim(0.5, 2.5)
+        ax.set_ylim(0, max([cis, trans]) * 1.2)
+        ax.set_xticklabels(['${cis}$', '${trans}$'], fontsize=14)
+        ax.set_ylabel('Contact probability', fontsize=15)
+        ax.tick_params(axis='both', which='major', labelsize=14,)
+        ax.tick_params(axis='x', which='major', width=0)
+        ax.tick_params(axis='y', which='major', width=2, length=5)
+        ax.spines['left'].set_linewidth(2)
+        ax.spines['bottom'].set_linewidth(0)
+        ax.ticklabel_format(axis='y', style='sci', scilimits=(0, 0), useMathText=True)
+        sns.despine()
+        outpdf = outprefix + "_cis_trans.pdf"
+        outpng = outprefix + "_cis_trans.png"
+        plt.savefig(outpdf, bbox_inches='tight', dpi=300)
+        plt.savefig(outpng, bbox_inches='tight', dpi=300)
+        logging.debug("Successful plotting total cis trans barplot in `{}`".format(outpdf))
+    output = outprefix + "_cis_trans.tsv"
+    ## output total cis and trans counts 
+    with open(output, 'w') as out:
+        print("Cis", end='\t', file=out)
+        print('\t'.join(map(str, cis_list)), file=out)
+        print("Trans", end='\t', file=out)
+        print('\t'.join(map(str, trans_list)), file=out)
+        logging.debug("Output total cis and trans count to `{}`".format(output))
+    plt.close() ## close plt
+    ## plotting per chromosome cis/trans ratio barplot
+    if args.perchr:
+        if not args.sample:
+            samples = list(map(lambda x: x.split(".")[0], args.cool))
+        else:
+            samples = args.sample
+            if len(samples) != len(args.cool):
+                logging.error('cool must equal sample')
+        legend = False if args.hideLegend else True
+        colors = args.colors if args.colors else None
+        data = concatCisTransData(args.cool, samples)
+        outtsv = outprefix + "_cis_trans_ratio_perchr.tsv"
+        data.to_csv(outtsv, sep='\t', header=None, index=None)
+        logging.debug("Successful outputting cis/trans ratio data to `{}`".format(outtsv))
+        ax = plotCisTransPerChrom(data, legend=legend)
+        outpdf = outprefix + "_cis_trans_ratio_perchr.pdf"
+        outpng = outprefix + "_cis_trans_ratio_perchr.png"
+        plt.savefig(outpdf, bbox_inches='tight', dpi=300)
+        plt.savefig(outpng, bbox_inches='tight', dpi=300)
+        logging.debug("Successful plotting cis/trans ratio per chrom barplot in `{}`".format(outpdf))
 
-    
-    print('\t'.join(map(str, cis_list)))
-    print('\t'.join(map(str, trans_list)))
 
 def statFrag(args):
     """

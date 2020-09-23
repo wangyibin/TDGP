@@ -56,6 +56,13 @@ class CMD(object):
 
     Params:
     -------
+    cmds: `list` command list
+    threads: `int` number of thread
+
+    Examples:
+    ---------
+    >>> cmds = ['sort file > sorted.file', 'sort file2 > sorted.file2‘]
+    >>> CMD(cmds)
     """
 
     def __init__(self, cmds, threads=4):
@@ -146,7 +153,11 @@ class Cluster(object):
             queue = queue if queue else "workq"
             array = "\n#PBS -J " + array if array else ""
             self.header = PBS_HEADER.format(name, queue, threads, array)
-
+        elif self.CLUSTER.upper() == "TORQUE":
+            name = "\nPBS -N " + name if name else ""
+            queue = queue if queue else "share"
+            array = "\n#PBS -J " + array if array else ""
+            self.header = PBS_HEADER.format(name, queue, threads, array)
         else:
             logging.warning("there is not of header "
                             "of cluster:`{}`".format(self.CLUSTER))
@@ -161,6 +172,8 @@ class Cluster(object):
         if self.CLUSTER.upper() == "SGE":
             self.raw_header = SGE_HEADER
         elif self.CLUSTER.upper() == "PBS":
+            self.raw_header = PBS_HEADER
+        elif self.CLUSTER.upper() == "TORQUE":
             self.raw_header = PBS_HEADER
         else:
             logging.warning("there is not of header "

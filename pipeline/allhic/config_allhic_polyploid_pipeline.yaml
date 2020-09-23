@@ -3,6 +3,9 @@
 genome:
         contig.fasta
 
+## allele table
+Allele:
+        Allele.ctg.table
 ## output file prefix
 sample:
         - AP85

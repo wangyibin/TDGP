@@ -22,6 +22,8 @@
 ##
 ## cluster_N:
 ##         1
+## Allele:
+##          Allele.ctg.table
 ## tag:
 ##         - R1
 ##         - R2
@@ -48,16 +50,24 @@ bin_sizes = config['bin_sizes']
 fq_suffix = config['fq_suffix']
 tag1 = config['tag'][0]
 
+Allele = config['Allele']
+
 SAMPLES = list(map(op.basename, glob.glob("data/*{}.{}".format(tag1, fq_suffix))))
 SAMPLES = list(map(lambda x: x.replace("."+fq_suffix, "").replace("_"+tag1, ""), SAMPLES))
 
-rule all:
-    input:
-        # lambda wildcards: "process/{}.bwa_aln.REduced.paired_only.bam".format(config['sample'][0])
-        #"allhic_result/groups.asm.fasta"
-        whole_pdf = expand("allhic_result/pdf/{bin_size}_Whole_genome.pdf", bin_size=bin_sizes),
-        chroms_pdf = expand("allhic_result/pdf/{bin_size}_{sample}.merged.counts_{enzyme_base}.{N}g{n}.pdf",
-            bin_size=bin_sizes, sample=(SAMPLE,), enzyme_base=(enzyme_base,), N=(N,), n=range(1,N+1))
+if config['plot']:
+    rule all:
+        input:
+            # lambda wildcards: "process/{}.bwa_aln.REduced.paired_only.bam".format(config['sample'][0])
+            #"allhic_result/groups.asm.fasta"
+            whole_pdf = expand("allhic_result/pdf/{bin_size}_Whole_genome.pdf", bin_size=bin_sizes),
+            chroms_pdf = expand("allhic_result/pdf/{bin_size}_group{n}.pdf", bin_size=bin_sizes, n=range(1,N+1))
+            
+else:
+    rule all:
+        input:
+            # lambda wildcards: "process/{}.bwa_aln.REduced.paired_only.bam".format(config['sample'][0])
+            "allhic_result/groups.asm.fasta"
 
 rule fa_index:
     input:
@@ -69,7 +79,6 @@ rule fa_index:
         "logs/{input}.log"
     shell:
         "samtools faidx {input} & bwa index -a bwtsw {input} 2>{log}"
-
 
 
 rule bwa_aln:
@@ -95,7 +104,7 @@ rule bwa_sampe:
     log:
         "logs/{sample}.bwa_sampe.log"
     shell:
-        "bwa sampe {FA} {input.sai} {input.fq} | samtools view -bhS > {output}"
+        "bwa sampe {FA} {input.sai} {input.fq} 2>{log}| samtools view -bhS -> {output}"
 
 rule preprocess_bam:
     input:
@@ -120,7 +129,6 @@ rule filter_bam:
     shell:
         "filterBAM_forHiC.pl {input} {output} 1>{log} 2>&1"
 
-
 rule sam2bam:
     input:
         "bwa_result/{sample}.clean.sam"
@@ -136,64 +144,88 @@ rule merge_bam:
     input:
         bam = expand("bwa_result/{sample}.clean.bam", sample=SAMPLES)
     output:
-        expand("allhic_result/{name}.merged.bam", name=config['sample'])
+        "allhic_result/{SAMPLE}.merged.bam"
     log:
-        expand("logs/{name}.merged.log", name=config['sample'])
+        "logs/{SAMPLE}.merged.log"
     threads: ncpus
     shell:
-        "samtools merge -@ {threads} {output} {input.bam} 1>{log} 2>&1"
+        "samtools merge -@ {threads} {output} {input.bam} 2>{log}"
 
-
-
-
-rule partition:
+rule prune:
     input:
         lambda wildcards: "allhic_result/{}.merged.bam".format(SAMPLE)
     output:
-        expand("allhic_result/{sample}.merged.counts_{enzyme_base}.{N}g{n}.txt",
-            sample=(SAMPLE,), enzyme_base=(enzyme_base,), N=(N,), n=range(1,N+1))
+        "prunning.bam"
+    log:
+        "logs/{}.prunning.log".format(SAMPLE)
+    threads: ncpus
+    shell:
+        "ALLHiC_prune -i {Allele} -b {input} -r {FA} 2>{log} "
+
+rule partition:
+    input:
+        "prunning.bam"
+    output:
+        #expand("allhic_result/{sample}.pruning.counts_{enzyme_base}.{N}g{n}.txt",
+        #    sample=(SAMPLE,), enzyme_base=(enzyme_base,), N=(N,), n=range(1,N+1)),
+        "prunning.clusters.txt",
+        "prunning.counts_{}.txt".format(enzyme_base),
+        # "allhic_result/prunning.clm"
     log:
         "logs/{}.partition.log".format(SAMPLE)
     shell:
-        "ALLHiC_partition -b {input} -r {FA} -e {enzyme_base} -k {N} 1>{log} 2>&1"
+        "ALLHiC_partition -b {input} -r {FA} -e {enzyme_base} -k {N} 1>{log} 2>&1 "
+        
 
+rule rescue:
+    input:
+        bam = lambda wildcards: "allhic_result/{}.merged.bam".format(SAMPLE),
+        cluster = "prunning.clusters.txt",
+        counts = lambda wildcards: "prunning.counts_{}.txt".format(enzyme_base),
+        # clm = "allhic_result/prunning.clm"
+    output:
+        expand("allhic_result/group{n}.txt", n=range(1, N+1)),
+    log:
+        "logs/{}.rescue.log".format(SAMPLE)
+    threads: ncpus
+    shell:
+        "ALLHiC_rescue -b {input.bam} -r {FA} -c {input.cluster} -i {input.counts} 2>{log} && "
+        "mv group*txt prunning* allhic_result"
+   
 rule extract:
     input:
-        bam = "allhic_result/{sample}.merged.bam",
+        bam = lambda wildcards: "allhic_result/{}.merged.bam".format(SAMPLE),
         #txt = "allhic_result/{sample}.clusters.txt"
-        txt = expand("allhic_result/{sample}.merged.counts_{enzyme_base}.{N}g{n}.txt",
-            sample=(SAMPLE,), enzyme_base=(enzyme_base,), N=(N,), n=range(1,N+1))
-
+        
     output:
-        "allhic_result/{sample}.merged.clm",
+        "allhic_result/{SAMPLE}.merged.clm",
     log:
-        "logs/{sample}_extract.log"
+        "logs/{SAMPLE}_extract.log"
     shell:
         "allhic extract {input.bam} {FA} --RE {enzyme_base} 2>{log}"
 
 rule optimize:
     input:
-        clm = "allhic_result/{sample}.merged.clm",
-        txt = "allhic_result/{sample}.merged.counts_{enzyme_base}.{N}g{n}.txt"
+        clm = lambda wildcards: "allhic_result/{}.merged.clm".format(SAMPLE),
+        txt = "allhic_result/group{n}.txt"
     output:
-        "allhic_result/{sample}.merged.counts_{enzyme_base}.{N}g{n}.tour"
+        "allhic_result/group{n}.tour"
     log:
-        "logs/{sample}.{enzyme_base}.{N}g{n}_optimize.log"
+        "logs/group{n}_optimize.log"
+    threads: ncpus
     shell:
-        "allhic optimize {input.txt} {input.clm} 2>{log}"
+        "allhic optimize {input.txt} {input.clm} 1>{log} 2>&1"
 
 rule build:
     input:
-        expand("allhic_result/{sample}.merged.counts_{enzyme_base}.{N}g{n}.tour",
-            sample=(SAMPLE,), enzyme_base=(enzyme_base,), N=(N,), n=range(1,N+1))
+        expand("allhic_result/group{n}.tour", n=range(1,N+1))
     output:
         fasta = "allhic_result/groups.asm.fasta",
         agp = "allhic_result/groups.agp"
     log:
         "logs/allhic.build.log"
     shell:
-        "cd allhic_result/ && ALLHiC_build ../{FA} 2 > ../{log}"
-
+        "cd allhic_result && ALLHiC_build ../{FA} 2 > ../{log}"
 
 rule getSizes:
     input:
@@ -201,7 +233,7 @@ rule getSizes:
     output:
         "allhic_result/chrom.sizes"
     shell:
-        "getChrLength.py {input} | grep -v tig > {output}"
+        "getChrLength.py {input} | grep -v tig | grep group > {output}"
 
 rule sort_bam:
     input:
@@ -225,20 +257,20 @@ rule bam_index:
     shell:
         "samtools index -@ {threads} {input}  2>{log}"
 
-rule plot:
-    input:
-        bam = expand("allhic_result/{sample}.sorted.bam", sample=(SAMPLE,)),
-        bai = expand("allhic_result/{sample}.sorted.bam.bai", sample=(SAMPLE, )),
-        agp = "allhic_result/groups.agp",
-        sizes = "allhic_result/chrom.sizes"
-    output:
-        whole_pdf = expand("allhic_result/pdf/{bin_size}_Whole_genome.pdf", bin_size=bin_sizes),
-        chroms_pdf = expand("allhic_result/pdf/{bin_size}_{sample}.merged.counts_{enzyme_base}.{N}g{n}.pdf",
-            bin_size=bin_sizes, sample=(SAMPLE,), enzyme_base=(enzyme_base,), N=(N,), n=range(1,N+1))
-    params:
-        ",".join(bin_sizes)
-    threads: ncpus
-    shell:
-        "ALLHiC_plot3 {input.bam} {input.agp} {input.sizes} -t {threads} --bin_size {params} && mv *.pdf allhic_result/pdf"
+if config['plot']:
+    rule plot:
+        input:
+            bam = expand("allhic_result/{sample}.sorted.bam", sample=(SAMPLE,)),
+            bai = expand("allhic_result/{sample}.sorted.bam.bai", sample=(SAMPLE, )),
+            agp = "allhic_result/groups.agp",
+            sizes = "allhic_result/chrom.sizes"
+        output:
+            whole_pdf = expand("allhic_result/pdf/{bin_size}_Whole_genome.pdf", bin_size=bin_sizes),
+            chroms_pdf = expand("allhic_result/pdf/{bin_size}_group{n}.pdf", bin_size=bin_sizes, n=range(1,N+1))
+        params:
+            ",".join(bin_sizes)
+        threads: ncpus
+        shell:
+            "ALLHiC_plot3 {input.bam} {input.agp} {input.sizes} -t {threads} --bin_size {params} && mv *.pdf allhic_result/pdf"
 
     

@@ -1,0 +1,15 @@
+## genome 
+genome: "genome.fasta"
+
+## groups db file, two columns(group\tchrom)
+groups: "groups.db"
+
+## number of threads
+ncpus: 10
+
+## ext of fastq file 
+ext: ['R1', 'R2']
+suffix: 'fastq.gz'
+
+## parameters of hisat2 
+hisat2_k: 4

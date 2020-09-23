@@ -322,7 +322,8 @@ def getCisCounts(args):
 
     bins['counts'] = counts
     bins.to_csv(args.out, sep='\t', header=None, index=None)
-
+    logging.debug(
+        "Successful outputting cis counts bedgraph to `{}`".format(args.out.name))
 
 def getTransCounts(args):
     """
@@ -359,6 +360,7 @@ def getTransCounts(args):
 
     bins['counts'] = counts
     bins.to_csv(args.out, sep='\t', header=None, index=None)
+    logging.debug("Successful outputting trans counts bedgraph to `{}`".format(args.out.name))
 
 
 if __name__ == "__main__":

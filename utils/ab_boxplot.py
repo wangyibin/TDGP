@@ -17,7 +17,7 @@
 
 from __future__ import print_function
 
-import numpy as mp
+import numpy as np
 import math
 import os.path as op
 import pandas as pd

@@ -59,14 +59,14 @@ class LinkLine(object):
         >>> links
         0 Chr1 123123 0 ...
         """
-        links.strandA = 0 if vpl.strand1 == '+' else 16
-        links.read1_name = vpl.chr1
-        links.read1_pos = vpl.pos1  
-        links.order1 = 0
-        links.strandB = 0 if vpl.strand2 == '+' else 16
-        links.read2_name = vpl.chr2
-        links.read2_pos = vpl.pos2
-        links.order2 = 1
+        self.strandA = 0 if vpl.strand1 == '+' else 16
+        self.read1_name = vpl.chr1
+        self.read1_pos = vpl.pos1  
+        self.order1 = 0
+        self.strandB = 0 if vpl.strand2 == '+' else 16
+        self.read2_name = vpl.chr2
+        self.read2_pos = vpl.pos2
+        self.order2 = 1
 
 
 def validpairs2links(args):
