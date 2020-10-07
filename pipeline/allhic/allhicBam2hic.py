@@ -41,7 +41,7 @@ def allhicBam2hic(args):
     fasta = args.fasta
     agp = args.agp 
 
-    out_prefix = bam.split(".")[0]
+    out_prefix = op.basename(bam).split(".")[0]
     out_links = "{}.links".format(out_prefix)
     out_sorted_links = "{}.sorted.links".format(out_prefix)
     out_assembly = "{}.assembly".format(out_prefix)
@@ -59,7 +59,7 @@ def allhicBam2hic(args):
     # os.system(grep_cmd)
     
     hic = "{}/visualize/run-assembly-visualizer.sh -p true \
-        {} {} {} ".format(args.software,out_assembly, out_sorted_links)
+        {} {} {} ".format(args.software, out_assembly, out_sorted_links)
     os.system(hic)
     
 

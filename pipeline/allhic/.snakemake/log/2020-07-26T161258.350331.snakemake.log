@@ -1,0 +1,25 @@
+Building DAG of jobs...
+Using shell: /usr/bin/bash
+Provided cluster nodes: 32
+Job counts:
+	count	jobs
+	1	all
+	1	build
+	1	extract
+	1	merge_bam
+	8	optimize
+	1	partition
+	13
+
+[Sun Jul 26 16:12:58 2020]
+rule merge_bam:
+    output: allhic_result/sample.merged.bam
+    log: logs/sample.merged.log
+    jobid: 12
+    threads: 12
+
+Error submitting jobscript (exit code 127):
+
+Shutting down, this might take some time.
+Exiting because a job execution failed. Look above for error message
+Complete log: /share/home/stu_wangyibin/code/TDGP/pipeline/allhic/.snakemake/log/2020-07-26T161258.350331.snakemake.log
