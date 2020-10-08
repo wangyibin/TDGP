@@ -78,8 +78,7 @@ class CMD(object):
 
 
 PBS_HEADER = """#!/bin/bash
-#PBS -m ae
-#PBS -j eo {}
+#PBS -j oe {}
 #PBS -q {}
 #PBS -V 
 #PBS -l nodes=1:ppn={} {}
