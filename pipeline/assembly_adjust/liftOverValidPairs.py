@@ -15,10 +15,12 @@ import os.path as op
 import sys
 import multiprocessing as mp
 import pandas as pd
+
 import numpy as np
 import warnings
 
 from collections import OrderedDict
+from pandarallel import pandarallel
 
 warnings.filterwarnings('ignore')
 
@@ -45,8 +47,6 @@ def debug(level=logging.DEBUG):
     formats += yellow(" %(message)s")
     logging.basicConfig(level=level, format=formats, datefmt="[%Y-%m-%d %H:%M:%S]")
 
-
-debug()
 
 def import_agp(agpfile, split=True):
     """
@@ -215,38 +215,65 @@ def liftOverValidPairs(args):
     pOpt.add_argument('-c', '--chunksize', type=int, default=10000,
             help='chunksize of  pandas read [default: %(default)s]')
     pOpt.add_argument('-T', dest='tmp', default='tmp', 
-            help='tempoary directory of output, if set to None '
-            'that will not split write to disk, direct write to '
-            'a file. [default: %(default)]')
+            help='tempoary directory of output, if set to None \n'
+            'that will not split write to disk, direct write to \n'
+            'a file. [default: %(default)s]')
+    pOpt.add_argument('--verbose', default=2, type=int,
+            choices=[0, 1, 2],
+            help='The verbosity level\n'
+                '0 - Don\'t display any logs\n'
+                '1 - Display only warning logs\n'
+                '2 - Display all logs\n')
     pOpt.add_argument('-h', '--help', action='help',
             help='show help message and exit.')
     
     args = p.parse_args(args)
 
+    # verbose
+    if args.verbose == 0:
+        debug(level=logging.ERROR)
+    elif args.verbose == 1:
+        debug(level=logging.WARNING)
+    elif args.verbose == 2:
+        debug(level=logging.DEBUG)
+
     old_agp_df, _ = import_agp(args.old_agp)
     new_agp_df, _ = import_agp(args.new_agp)
     new_agp_df = new_agp_df.reset_index().set_index(['chrom', 'id'])
-    mgr = mp.Manager()
-    ns = mgr.Namespace()
-    ns.old_agp_df = old_agp_df
-    ns.new_agp_df = new_agp_df
-    ns.tmp = args.tmp
+    
     chunk_df_iter = import_validpairs(args.validpairs, args.chunksize)
     if args.tmp:
         try:
             os.makedirs(args.tmp)
         except:
             pass
-    with mp.Pool(args.threads, maxtasksperchild=args.threads) as pool:
-        task_list = []
-        for i, df in enumerate(chunk_df_iter):
-            f = pool.apply_async(liftOverChunk, 
-                    [ns, df, i])
-            task_list.append(f)
+    results = []
+    pandarallel.initialize(nb_workers=args.threads, verbose=1)
+    for i, chunk_df in enumerate(chunk_df_iter):
+        chunk_df.chr1, chunk_df.pos1 = \
+            zip(*chunk_df.parallel_apply(lambda x: get_new_coord(x.chr1, 
+                                        x.pos1, old_agp_df, new_agp_df), axis=1))
+        chunk_df.chr2, chunk_df.pos2 = \
+            zip(*chunk_df.parallel_apply(lambda x: get_new_coord(x.chr2, 
+                                        x.pos2, old_agp_df, new_agp_df), axis=1))
+        chunk_df.dropna(inplace=True)
+        if args.tmp:
+            res = "{}/{}.{}.ValidPairs".format(args.tmp, i, os.getpid())
+            chunk_df.to_csv(res, sep='\t', header=None, index=None)
+            logging.debug("Successful converted `{}` chunk".format(i))
+            results.append(res)
+        else:
+            results.append(chunk_df)
+    # with mp.Pool(args.threads, maxtasksperchild=args.threads) as pool:
+    #     task_list = []
+    #     for i, df in enumerate(chunk_df_iter):
+    #         f = pool.apply_async(liftOverChunk, 
+    #                 [ns, df, i])
+    #         task_list.append(f)
         
-        results = []
-        for f in task_list:
-            results.append(f.get())
+    #     results = []
+    #     for f in task_list:
+    #         results.append(f.get())
     if not args.tmp:
         result_df = pd.concat(results)
         result_df.to_csv(args.output, sep='\t', header=None, index=None)
