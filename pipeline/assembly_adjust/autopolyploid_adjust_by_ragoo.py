@@ -56,10 +56,11 @@ def write_scripts(adjust_db, relatives_dir, tig_dir,
                 pass
             if contig != chrom:
                 cmd = header + "\n"
-                cmd += "ln -s {} \n".format(chrom_path)
-                cmd += "ln -s {} \n".format(contig_path)
+                cmd += "ln -s {}\n".format(chrom_path)
+                cmd += "ln -s {}\n".format(contig_path)
+                #cmd += "seqkit replace -p {0} -r {1} {2} > {3}\n".format(contig, chrom, contig_path, chrom + ".fasta")
                 cmd += "ragoo.py {} {}\n".format(chrom_fasta, contig_fasta)
-                cmd += "ragooOrder2tour.py ragoo_output/orderings/{0}_orderings.txt > {0}.tour\n".format(contig)
+                cmd += "ragooOrder2tour.py ragoo_output/orderings/{0}_orderings.txt > {1}.tour\n".format(contig, chrom)
                 script = "ragoo/{0}/{1}/run_{1}-{2}.sh".format(directory, chrom, contig)
 
                 with open(script, 'w') as fp:

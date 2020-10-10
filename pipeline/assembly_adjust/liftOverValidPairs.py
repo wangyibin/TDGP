@@ -16,32 +16,49 @@ import sys
 import multiprocessing as mp
 import pandas as pd
 import numpy as np
+import warnings
+
 from collections import OrderedDict
 
+warnings.filterwarnings('ignore')
 
 ValidPairsHeader = ["read", "chr1", "pos1", "strand1",
                     "chr2", "pos2", "strand2", "size",
                     "site1", "site2"]
-
+ValidPairsHeader_dtype = {'pos1': np.int32, 'pos2': np.int32,
+                        'size': np.int32}
 AGP_NAMES_tig = ['chrom', 'start', 'end', 'number',
                  'type', 'id', 'tig_start', 'tig_end', 'orientation']
-AGP_NAMES_tig_dtype = {'chrom': '|S', 'start': np.int64, 
-                    'end': np.int64, 'number': np.int32,
-                 'type': '|S', 'id': '|S', 'tig_start': np.int32, 
-                 'tig_end': np.int32, 'orientation': '|S'}
+AGP_NAMES_tig_dtype = {'start': np.int32, 'end': np.int32, 
+                'number': np.int32}
 AGP_NAMES_gap = ['chrom', 'start', 'end', 'number',
                  'type', 'length', 'type', 'linkage', 'evidence']
 
+def debug(level=logging.DEBUG):
+    """
+    Basic config logging format
+    """
+    from TDGP.apps.font import magenta, green, yellow, white
+    formats = white("%(asctime)s") 
+    formats += magenta(" <%(module)s:%(funcName)s>")
+    formats += white(" [%(levelname)s]")
+    formats += yellow(" %(message)s")
+    logging.basicConfig(level=level, format=formats, datefmt="[%Y-%m-%d %H:%M:%S]")
+
+
+debug()
 
 def import_agp(agpfile, split=True):
     """
     import agp file and return a dataframe
     """
     df = pd.read_csv(agpfile, sep='\t',
-                     header=None, index_col=None)
+                     header=None, index_col=None,
+                     names=AGP_NAMES_tig, 
+                     dtype=AGP_NAMES_tig_dtype)
     if split:
-        tig_df = df[df[4] == 'W']
-        gap_df = df[df[4] == 'U']
+        tig_df = df[df['type'] == 'W']
+        gap_df = df[df['type'] == 'U']
         tig_df.columns = AGP_NAMES_tig
         gap_df.columns = AGP_NAMES_gap
         tig_df.set_index('chrom', inplace=True)
@@ -54,11 +71,28 @@ def import_agp(agpfile, split=True):
     else:
         return df
 
-def import_validpairs(infile, chunksize=1000):
+def import_validpairs(infile, chunksize=10000):
+    """
+    import validpairs which from hicpro.
+
+    Params:
+    --------
+    infile: `str` input validpairs file
+    chunksize: `int` chunksize for pandas reader [default: 10000].
+
+    Returns:
+    --------
+    out: `pandas.DataFrame.chunk.iter`
+
+    Examples:
+    --------
+    >>> import_validpairs("All.ValidPairs")
+    """
     df = pd.read_csv(infile, usecols=range(10), header=None,
-                    sep='\t', index_col=None, 
-                    names=ValidPairsHeader, 
-                    chunksize=chunksize)
+                    sep='\t', index_col=None, chunksize=chunksize,
+                    names=ValidPairsHeader,  
+                    dtype=ValidPairsHeader_dtype)
+    logging.debug("Load `{}` with chunksize `{}`".format(infile, chunksize))
     return df
 
 
@@ -114,20 +148,47 @@ def get_new_coord(chrom, pos, old_agp_df, new_agp_df):
         new_chrom_pos = new_chrom_start + old_tig_pos - 1
     else:
         new_chrom_pos = new_chrom_end - old_tig_pos
-    del old_chrom_df, new_chrom_df
-    gc.collect()
+    # del old_chrom_df, new_chrom_df, old_tig_res
+    # gc.collect()
     return chrom, new_chrom_pos
 
 
-def liftOverChunk(old_agp_df, new_agp_df, chunk_df ):
+def liftOverChunk(ns, chunk_df, idx):
+    """
+    liftover coordinate of validpairs in a chunk.
+
+    Params:
+    --------
+    ns: multiprocessing.Manager.NameSpace with `old_agp_df`, `new_agp_df`, and `tmp`.
+    chunk_df: `dataframe` dataframe of validpairs.
+    idx: `int` number of chunk.
+
+    Returns:
+    --------
+    chunk_df or name of results
+
+    Examples:
+    --------
+    >>> liftOverChunk(old_agp_df, new_agp_df, chunk_df, 1, "tmp")
+    "tmp/1.tmp.ValidPairs
+
+    """
     
     chunk_df.chr1, chunk_df.pos1 = zip(*chunk_df.apply(lambda x: get_new_coord(x.chr1, 
-                                            x.pos1, old_agp_df, new_agp_df), axis=1))
+                                            x.pos1, ns.old_agp_df, ns.new_agp_df), axis=1))
     chunk_df.chr2, chunk_df.pos2 = zip(*chunk_df.apply(lambda x: get_new_coord(x.chr2, 
-                                            x.pos2, old_agp_df, new_agp_df), axis=1))
+                                            x.pos2, ns.old_agp_df, ns.new_agp_df), axis=1))
     chunk_df.dropna(inplace=True)
-    chunk_df.loc[:, 'pos2'] = chunk_df['pos2'].astype('int32')
-    return chunk_df
+    #chunk_df.loc[:, 'pos2'] = chunk_df['pos2'].astype('int32')
+    if tmp:
+        res = "{}/{}.tmp.ValidPairs".format(ns.tmp, idx)
+        chunk_df.to_csv(res, sep='\t', header=None, index=None)
+        # del chunk_df
+        # gc.collect()
+        logging.debug("Successful converted `{}` chunk".format(idx))
+        return res
+    else:
+        return chunk_df
 
 
 def liftOverValidPairs(args):
@@ -147,9 +208,16 @@ def liftOverValidPairs(args):
             help='validpairs from hicpro')
     pReq.add_argument('old_agp', help='old agp file')
     pReq.add_argument('new_agp', help='new agp file')
-    
+    pOpt.add_argument('-o', '--output', default="All.New.ValidPairs", 
+            help='output file [default: All.New.ValudPairs]')
     pOpt.add_argument('-t', '--threads', type=int, default=4,
             help='number of threads [default: %(default)s]')
+    pOpt.add_argument('-c', '--chunksize', type=int, default=10000,
+            help='chunksize of  pandas read [default: %(default)s]')
+    pOpt.add_argument('-T', dest='tmp', default='tmp', 
+            help='tempoary directory of output, if set to None '
+            'that will not split write to disk, direct write to '
+            'a file. [default: %(default)]')
     pOpt.add_argument('-h', '--help', action='help',
             help='show help message and exit.')
     
@@ -158,22 +226,38 @@ def liftOverValidPairs(args):
     old_agp_df, _ = import_agp(args.old_agp)
     new_agp_df, _ = import_agp(args.new_agp)
     new_agp_df = new_agp_df.reset_index().set_index(['chrom', 'id'])
-    chunk_df_iter = import_validpairs(args.validpairs)
-   
-    with mp.Pool(args.threads) as pool:
+    mgr = mp.Manager()
+    ns = mgr.Namespace()
+    ns.old_agp_df = old_agp_df
+    ns.new_agp_df = new_agp_df
+    ns.tmp = args.tmp
+    chunk_df_iter = import_validpairs(args.validpairs, args.chunksize)
+    if args.tmp:
+        try:
+            os.makedirs(args.tmp)
+        except:
+            pass
+    with mp.Pool(args.threads, maxtasksperchild=args.threads) as pool:
         task_list = []
-        for df in chunk_df_iter:
+        for i, df in enumerate(chunk_df_iter):
             f = pool.apply_async(liftOverChunk, 
-                    [old_agp_df, new_agp_df, df])
+                    [ns, df, i])
             task_list.append(f)
         
         results = []
         for f in task_list:
             results.append(f.get())
-        
+    if not args.tmp:
         result_df = pd.concat(results)
-        result_df.to_csv('out.tsv', sep='\t', header=None, index=None)
-        
+        result_df.to_csv(args.output, sep='\t', header=None, index=None)
+        logging.debug("Done, results is writed in `{}`".format(args.output))
+    else:
+        flag = os.system("cat {} > {}".format(" ".join(results), args.output))
+        os.system("rm -rf {}".format(args.tmp))
+        if not flag:
+            logging.debug("Done, results is writed in `{}`".format(args.output))
+        else:
+            logging.debug("Error, something wrong happend in cat")
 
 
 if __name__ == "__main__":
