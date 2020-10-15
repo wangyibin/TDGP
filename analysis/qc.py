@@ -73,9 +73,11 @@ class ValidPairsLine(object):
             logging.error('Nothing item in this line.')
             exit(1)
         self.line_list = self.line.strip().split()
+
         (self.read, self.chr1, self.pos1, self.strand1, 
          self.chr2, self.pos2, self.strand2, self.size, 
-         self.site1, self.site2, _, _) = self.line_list
+         self.site1, self.site2) = self.line_list[:10]
+
         self.pos1, self.pos2 = int(self.pos1), int(self.pos2)
         self.size = int(self.size)
         #self.distance = self.pos2 - self.pos1

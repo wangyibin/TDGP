@@ -181,10 +181,9 @@ def liftOverChunk(ns, chunk_df, idx):
     chunk_df.dropna(inplace=True)
     chunk_df.loc[:, 'pos1'] = chunk_df['pos1'].astype('int32')
     chunk_df.loc[:, 'pos2'] = chunk_df['pos2'].astype('int32')
-    
     if tmp:
         res = "{}/{}.tmp.ValidPairs".format(ns.tmp, idx)
-        chunk_df.to_csv(res, sep='\t', header=None, index=None, float_format='%.0f')
+        chunk_df.to_csv(res, sep='\t', header=None, index=None)
         # del chunk_df
         # gc.collect()
         logging.debug("Successful converted `{}` chunk".format(idx))
@@ -192,6 +191,50 @@ def liftOverChunk(ns, chunk_df, idx):
     else:
         return chunk_df
 
+def liftOverParallel(chunk_df_iter, old_agp_df, 
+            new_agp_df, tmp, threads=4):
+    """
+    liftover coordinate of validpairs in parallel.
+
+    Params:
+    --------
+    chunk_df_iter: `dataframe` dataframe of validpairs.
+    old_agp_df: `dataframe` old agp dataframe.
+    new_agp_df: `dataframe` new agp dataframe.
+    tmp: `str` tempoary direcory of output.
+    threads: `int` threads number of program [default: 4]
+
+    Returns:
+    --------
+    chunk_df or name of results
+
+    Examples:
+    --------
+    >>> liftOverParallel(chunk_df_iter, "tmp", threads=4)
+    ["tmp/1.tmp.ValidPairs]
+
+    """
+    results = []
+    pandarallel.initialize(nb_workers=threads, verbose=1)
+    for i, chunk_df in enumerate(chunk_df_iter):
+        chunk_df.chr1, chunk_df.pos1 = \
+            zip(*chunk_df.parallel_apply(lambda x: get_new_coord(x.chr1, 
+                                        x.pos1, old_agp_df, new_agp_df), axis=1))
+        chunk_df.chr2, chunk_df.pos2 = \
+            zip(*chunk_df.parallel_apply(lambda x: get_new_coord(x.chr2, 
+                                        x.pos2, old_agp_df, new_agp_df), axis=1))
+        chunk_df.dropna(inplace=True)
+        if tmp:
+            res = "{}/{}.{}.ValidPairs".format(tmp, i, os.getpid())
+            chunk_df.to_csv(res, sep='\t', header=None, index=None, 
+                        float_format='%.0f')
+        
+            logging.debug("Successful converted `{}` chunk".format(i))
+            results.append(res)
+        else:
+            results.append(chunk_df)
+    
+    return results
 
 def liftOverValidPairs(args):
     """
@@ -249,23 +292,8 @@ def liftOverValidPairs(args):
             os.makedirs(args.tmp)
         except:
             pass
-    results = []
-    pandarallel.initialize(nb_workers=args.threads, verbose=1)
-    for i, chunk_df in enumerate(chunk_df_iter):
-        chunk_df.chr1, chunk_df.pos1 = \
-            zip(*chunk_df.parallel_apply(lambda x: get_new_coord(x.chr1, 
-                                        x.pos1, old_agp_df, new_agp_df), axis=1))
-        chunk_df.chr2, chunk_df.pos2 = \
-            zip(*chunk_df.parallel_apply(lambda x: get_new_coord(x.chr2, 
-                                        x.pos2, old_agp_df, new_agp_df), axis=1))
-        chunk_df.dropna(inplace=True)
-        if args.tmp:
-            res = "{}/{}.{}.ValidPairs".format(args.tmp, i, os.getpid())
-            chunk_df.to_csv(res, sep='\t', header=None, index=None, float_format='%.0f')
-            logging.debug("Successful converted `{}` chunk".format(i))
-            results.append(res)
-        else:
-            results.append(chunk_df)
+    results = liftOverParallel(chunk_df_iter, old_agp_df, new_agp_df, 
+                    'tmp', args.threads)
     # with mp.Pool(args.threads, maxtasksperchild=args.threads) as pool:
     #     task_list = []
     #     for i, df in enumerate(chunk_df_iter):
