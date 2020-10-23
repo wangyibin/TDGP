@@ -606,7 +606,7 @@ def validStat(args):
 
 def plotDistDensity(args):
     """
-    %prog all.validpairs out [Options]
+    %progs all.validpairs out [Options]
         Plot the IDE of all genome or per chromosome
     """
     p = OptionParser(plotDistDensity.__doc__)
@@ -655,7 +655,7 @@ def plotDistDensity(args):
             slopeRange=opts.slopeRange) #, color=color)
 def plotIDEMulti(args):
     """
-    %(prog) 1.ValidPairs 2.ValidPairs ... [Options]
+    %(prog)s 1.ValidPairs 2.ValidPairs ... [Options]
         To multi sample IDE in a picture.
     """
     p = p=argparse.ArgumentParser(prog=plotIDEMulti.__name__,
@@ -671,11 +671,11 @@ def plotIDEMulti(args):
             help='output file')
     pOpt.add_argument('--chrom', default=None, help='plot chrom list')
     pOpt.add_argument('--scale', default=100000, type=int, metavar='int',
-            help='the scale of data [default: %(default)]')
+            help='the scale of data [default: %(default)s]')
     pOpt.add_argument('--xmin', default=1e5, type=float, metavar='float',
-            help='min value of xtick [default: %(default)]')
+            help='min value of xtick [default: %(default)s]')
     pOpt.add_argument('--xmax', default=2e7, type=float, metavar='float',
-            help='max value of xtick [default: %(default)]')
+            help='max value of xtick [default: %(default)s]')
     pOpt.add_argument('--plotSlope', action='store_true', default=False,
             help='plotting slope line in picture [default: %(default)s]')
     pOpt.add_argument('--slopeRange', default='500000-7000000', 
