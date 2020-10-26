@@ -142,7 +142,7 @@ def run_synteny(pairs):
     script = 'run_{}.sh'.format(pairs)
     with open(script, 'w') as out:
         cmd = header + "\n"
-        cmd += 'python -m jcvi.compara.catalog ortholog {} {} --no_strip_names --nochpf \n'.format(sample1, sample2)
+        cmd += 'python -m jcvi.compara.catalog ortholog {} {} --cscore=.99 --no_strip_names --nochpf \n'.format(sample1, sample2)
         out.write(cmd)
     os.system('qsub {}'.format(script))
     os.chdir('../')
@@ -194,20 +194,20 @@ def extract_fasta(infasta, gene_set, output_handle):
             SeqIO.write(record, output_handle, 'fasta')
 
 
-def create_empty_allele_table(homoTags):
+def create_empty_allele_table(chrom_list):
     """
     create a empty dataframe for allele table
 
     Params:
     --------
     homoTags: `list` or `array-like` list for homologs  tags
-                e.g. ['g1', 'g2', 'g3', 'g4']
+                e.g. ['Chr01g1', 'Chr01g2', 'Chr01g3', 'Chr01g4']
     """
 
-    i = len(homoTags)
+    i = len(chrom_list)
     columns = []
-    for s in string.uppercase[:i]:
-        columns.append('gene', + i)
+    for s in string.ascii_uppercase[:i]:
+        columns.append('gene' + s)
     
     df = pd.DataFrame(columns=columns)
 
