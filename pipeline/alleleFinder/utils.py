@@ -10,13 +10,18 @@ import argparse
 import logging
 import os
 import os.path as op
+import re
 import sys
 import string
 import pandas as pd
-
+import warnings
 from Bio import SeqIO
+from collections import OrderedDict
 from itertools import combinations
 
+from pandas.core.indexing import convert_from_missing_indexer_tuple
+
+warnings.filterwarnings('ignore')
 
 PBS_HEADER = """#!/bin/bash
 #PBS -j oe {}
@@ -35,6 +40,21 @@ SGE_HEADER = """#!/bin/bash
 #$ -q {}
 #$ -pe mpi {} {}
 """
+
+
+def debug(level=logging.DEBUG):
+    """
+    Basic config logging format
+    """
+    from TDGP.apps.font import magenta, green, yellow, white
+    formats = white("%(asctime)s") 
+    formats += magenta(" <%(module)s:%(funcName)s>")
+    formats += white(" [%(levelname)s]")
+    formats += yellow(" %(message)s")
+    logging.basicConfig(level=level, format=formats, datefmt="[%Y-%m-%d %H:%M:%S]")
+
+debug()
+
 class Cluster(object):
     """
     class of cluster operation
@@ -127,6 +147,82 @@ class Cluster(object):
 
     __retr__ = __str__
 
+class BlockHeader(object):
+    def __init__(self, line):
+        self.header = line.strip()
+        self.list = self.header.split(" ")
+        self.num = int(self.list[2].strip(":"))
+        self.score = float(self.list[3].split("=")[1])
+        self.evalue = float(self.list[4].split("=")[1])
+        self.N = int(self.list[5].split("=")[1])
+        self.pairs = self.list[6]
+    def __str__(self):
+        return self.header
+    __repr__ = __str__
+
+
+class collinearity(object):
+    def __init__(self, data):
+        self.data = data
+        if not op.exists(self.data):
+            logging.error('No such file of `{}`'.format(self.data))
+            sys.exit()
+        self.load()
+        
+    def load(self):
+        results = []
+        with open(self.data, 'r') as fp:
+            block_header = ""
+            for line in fp:
+                if line.startswith("#"):
+                    if line[:12] == "## Alignment":
+                        block_header = BlockHeader(line)
+                    else:
+                        continue
+                else:
+                    if block_header:
+                        block_pairs = block_header.pairs.split("&")
+                        line_list = line.strip().split()
+                        line_list = block_pairs + line_list
+                        results.append(line_list)
+        self.df = pd.DataFrame(results, columns=['chr1', 'chr2', 'blockN', 'geneN', 
+                            'gene1', 'gene2', 'evalue'])
+        return self.df
+    
+    @property
+    def inter_df(self):
+        return self.df.loc[self.df.chr1 != self.df.chr2].reset_index()
+        
+    @property
+    def intra_df(self):
+        return self.df.loc[self.df.chr1 == self.df.chr2].reset_index()
+    
+    def to_anchor_per_hap(self, hap_suffix=['g1', 'g2', 'g3', 'g4'], 
+                            store=True):
+        length = len(hap_suffix[0])
+        anchor_res_db = OrderedDict()
+        df = self.inter_df
+        for pair in pairs(hap_suffix):
+            pair_list = pair.split("-")
+            tmp_df = df.loc[(df.chr1.str[-length:] == pair_list[0]) &
+                            (df.chr2.str[-length:] == pair_list[1])]
+            anchor_res_db[pair] = tmp_df[['gene1', 'gene2']]
+        
+            if store:
+                out = "{}.collinearity".format(pair)
+                anchor_res_db[pair].to_csv(out, sep='\t', index=None, header=None)
+                logging.debug('Output anchor file in `{}`'.format(out))
+
+        if store:
+            df = pd.concat(list(anchor_res_db.values()))
+            out = "{}.all.anchors".format(".".join(hap_suffix))
+            df.to_csv(out, sep='\t', index=None, header=None)
+            logging.debug('Output all anchor file in `{}`'.format(out))
+
+        return anchor_res_db
+    
+        
+
 def pairs(samples):
     samples = list(combinations(samples, 2))
 
@@ -192,6 +288,136 @@ def extract_fasta(infasta, gene_set, output_handle):
     for record in fa:
         if record.id in gene_set:
             SeqIO.write(record, output_handle, 'fasta')
+
+
+def rename_gff_by_strings_per_hap(ingff, output_handle, hap_suffix_list=['g1', 'g2', 'g3', 'g4'],
+                         gene_idx=1,  prefix="", suffix=""):
+    """
+    rename MCScanX gff ID by a suffix/prefix string
+
+    Params:
+    --------
+    ingff: `str` input gff file 
+    output_handle:  `handle` of output
+    gene_idx: `int` gene column number
+    prefix/suffix: `str` strings of gene ID prefix/suffix [default: ""]
+
+    Returns:
+    ---------
+    write renamed gff to a new file
+
+    Examples:
+    --------
+    >>> rename_gff_by_strings("sample.gff", output_handle, prefix="tetra")
+    """
+    hap_suffix_len = len(hap_suffix_list[0])
+    gene_prefix_list = []
+    for i in range(len(hap_suffix_list)):
+        gene_prefix_list.append(string.ascii_uppercase[i])
+    gene_prefix_db = dict(zip(hap_suffix_list, gene_prefix_list))
+
+    gff_df = pd.read_csv(ingff, sep='\t', header=None, 
+                index_col=None, comment='#')
+    groupby_iter = gff_df.groupby(gff_df[0].str[-hap_suffix_len:])
+    results = []
+    for group, df in groupby_iter:
+        if group in hap_suffix_list:
+            prefix = gene_prefix_db[group]
+            df.loc[:, gene_idx] = "{}|".format(prefix) + df[gene_idx]
+        results.append(df)
+    gff_df = pd.concat(results, axis=0)
+    gff_df = gff_df.sort_values(by=[0, 2])
+    gff_df.to_csv(output_handle, sep='\t', header=None, index=None)
+
+
+def rename_gff_by_strings(ingff, output_handle, gene_idx=1,  prefix="", suffix=""):
+    """
+    rename MCScanX gff ID by a suffix/prefix string
+
+    Params:
+    --------
+    ingff: `str` input gff file 
+    output_handle:  `handle` of output
+    gene_idx: `int` gene column number
+    prefix/suffix: `str` strings of gene ID prefix/suffix [default: ""]
+
+    Returns:
+    ---------
+    write renamed gff to a new file
+
+    Examples:
+    --------
+    >>> rename_gff_by_strings("sample.gff", output_handle, prefix="tetra")
+    """
+    gff_df = pd.read_csv(ingff, sep='\t', header=None, 
+                index_col=None, comment='#')
+    gff_df[gene_idx] = prefix + gff_df[gene_idx] + suffix
+    gff_df.to_csv(output_handle, sep='\t', header=None, index=None)
+
+
+def rename_fasta_by_strings(infasta, output_handle, prefix="", suffix=""):
+    """
+    rename fasta ID by a suffix/prefix string
+
+    Params:
+    --------
+    ingff: `str` input fasta file 
+    output_handle:  `handle` of output
+    prefix/suffix: `str` strings of gene ID prefix/suffix [default: ""]
+
+    Returns:
+    ---------
+    write renamed fasta to a new file
+
+    Examples:
+    --------
+    >>> rename_fasta_by_strings("sample.fasta", output_handle, prefix="tetra")
+    """
+    if infasta[-2:] == "gz":
+        fp = gzip.open(infasta)
+    else:
+        fp = open(infasta)
+    
+    fa = SeqIO.parse(fp, 'fasta')
+    for record in fa:
+        renamed_id = "{}{}{}".format(prefix, record.id, suffix)
+        record.id = renamed_id
+        record.description = ""
+        SeqIO.write(record, output_handle, 'fasta')
+        
+
+def rename_fasta(infasta, rename_db, output_handle):
+    """
+    rename fasta id by a rename database
+
+    Params:
+    --------
+    infasta: `str` input fasta file
+    rename_db: `dict` rename database
+    output_handle:  `handle` of output
+
+    Returns:
+    ---------
+    write renamed fasta to a fasta file
+
+    Examples:
+    --------
+    >>> rename_fasta("sample.fasta", rename_db, output_handle)
+    """
+    if infasta[-2:] == "gz":
+        fp = gzip.open(infasta)
+    else:
+        fp = open(infasta)
+    
+    fa = SeqIO.parse(fp, 'fasta')
+    for record in fa:
+        if record.id in rename_db:
+            renamed_id = rename_db[record.id]
+            record.id = renamed_id
+            record.description = ""
+            SeqIO.write(record, output_handle, 'fasta')
+        else:
+            continue
 
 
 def create_empty_allele_table(chrom_list):
