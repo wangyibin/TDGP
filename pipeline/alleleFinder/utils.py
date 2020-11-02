@@ -15,10 +15,12 @@ import sys
 import string
 import pandas as pd
 import warnings
+import multiprocessing as mp
 from Bio import SeqIO
-from collections import OrderedDict
+from collections import OrderedDict, Counter
 from itertools import combinations
-
+from joblib import Parallel, delayed
+from pandarallel import pandarallel
 from pandas.core.indexing import convert_from_missing_indexer_tuple
 
 warnings.filterwarnings('ignore')
@@ -238,7 +240,8 @@ class collinearity(object):
                      sep='\t', index=None, header=None)
         
         return anchor_res_db
-    
+
+
     def createEmptyAlleleTable(self):
         """
         create a empty dataframe for allele table
@@ -303,6 +306,13 @@ def split_bed_by_chr(bedfile, outdir='./', prefix=None):
         data.to_csv(out, sep='\t',
                     header=None, index=None)
         logging.debug('output new bed in `{}`'.format(out))
+
+def which_hap(gene, sep="|"):
+    if "|" in gene:
+        return gene.split(sep, 1)[0]
+    else:
+        return
+
 
 
 def extract_fasta(infasta, gene_set, output_handle, exclude=False):
@@ -502,7 +512,7 @@ def import_anchor(anchor):
     return df
 
 
-def import_blast(blast, noself=True):
+def import_blast(blast, noself=True, onlyid=False):
     """
     import blast file as dataframe
     """
@@ -510,13 +520,109 @@ def import_blast(blast, noself=True):
                 'mismatch', 'gap', 'qstart', 'qend', 
                 'sstart', 'send', 'evalue', 'bitscore']
     
+    if not op.exists(blast):
+        logging.error('No such file of `{}`.'.format(blast))
+        sys.exit()
+    else:
+        logging.debug('Load file of `{}`.'.format(blast))
+    
+    if onlyid:
+        header = header[:2]
+        logging.debug('Only load two column of qseqid and sseqid.')
+    usecols = list(range(len(header)))
     df = pd.read_csv(blast, sep='\t', header=None,
-                index_col=None, names=header)
+                index_col=None, names=header, usecols=usecols)
     
     if noself:
         df = df[df.qseqid != df.sseqid]
+        logging.debug('Only load with self pairs.')
     
     return df
+
+
+def alleleTable2GeneList(alleleTable_df):
+    """
+    convert allele table dataframe to gene list
+    """
+    genes = []
+    for column in alleleTable_df.columns:
+        l = alleleTable_df[column].dropna().to_list()
+        genes += l
+    return genes
+    
+def alleleTable2AllFrame(alleleTable_df):
+    """
+    convert allele table dataframe to a dataframe with all dup gene
+    
+    """
+    dup_gene_df = alleleTable_df.dup_gene.str.split(",").apply(pd.Series, 1)
+    dup_gene_df.columns = list(map(lambda x: "dup_gene{}".format(x), dup_gene_df.columns))
+    add_dup_df2 = pd.concat([ dup_gene_df, alleleTable_df], axis=1)
+    add_dup_df2.drop('dup_gene', axis=1, inplace=True)
+    
+    return add_dup_df2
+
+
+def AllFrame2alleleTable(alleleTable_df):
+    """
+    convert all allele table dataframe to a dataframe with one dup gene
+    
+    """
+    dup_gene_columns = alleleTable_df.columns[
+        alleleTable_df.columns.str.find('dup_gene').map(lambda x: x == 0)]
+    def func(x):
+        res = x[dup_gene_columns].dropna()
+        if not res.empty:
+            return ",".join(res)
+        else:
+            return np.nan
+    add_dup_df2 = alleleTable_df.copy()
+    add_dup_df2.drop(dup_gene_columns, axis=1, inplace=True)
+    add_dup_df2['dup_gene'] = alleleTable_df.apply(func, 1).dropna()
+    
+    return add_dup_df2
+
+def remove_dup_in_dup_gene_columns(add_dup_df, dup_genes, 
+                            gene_headers=['geneA', 'geneB', 'geneC', 'geneD']):
+    res_df = add_dup_df.copy()
+    dup_gene_df = add_dup_df.dup_gene.str.split(",").apply(pd.Series, 1)
+    dup_gene_df.columns = list(map(lambda x: "dup_gene{}".format(x), dup_gene_df.columns))
+    add_dup_df2 = pd.concat([ dup_gene_df, add_dup_df], sort=False, axis=1)
+    add_dup_df2.drop('dup_gene', axis=1, inplace=True)
+    rm_idx = []
+    for gene in dup_genes:
+        tmp_df = add_dup_df2.loc[add_dup_df2.isin([gene]).any(1)]
+        if tmp_df.empty:
+            continue
+        if len(tmp_df) < 2:
+            continue
+        
+        idx_series = tmp_df.apply(lambda x: len(x.dropna()), 1).sort_values()
+        idx_series = idx_series.index.to_list()
+        for j in  range(0, len(tmp_df) - 1):
+            if j == 0:
+                idxmax = idx_series[j]
+                idxmin = idx_series[j + 1]
+            else:
+                idxmin = idx_series[j + 1]
+            rm_idx.append(idxmin)
+
+            allele_genes = add_dup_df.loc[idxmax, gene_headers].to_list()
+            old_dup_genes_series = add_dup_df.loc[idxmax, 'dup_gene']
+
+            if isinstance(old_dup_genes_series, float):
+                old_dup_genes = []
+            else:
+                old_dup_genes = old_dup_genes_series.split(",")
+            new_dup_genes = add_dup_df2.loc[idxmin].dropna().to_list()
+            new_dup_genes = set(new_dup_genes) - set(allele_genes) | set(old_dup_genes) 
+            new_dup_genes = set(new_dup_genes) - set(allele_genes)
+            res_df.loc[idxmax, 'dup_gene'] = ",".join(sorted(new_dup_genes))
+            add_dup_df2.drop(idxmin, 0, inplace=True)
+    res_df.drop(rm_idx, axis=0, inplace=True)
+    res_df.reset_index(inplace=True)
+    res_df.drop('index', axis=1, inplace=True)
+    return res_df
 
 
 def applyParallel(dfGrouped, func, threads=4):

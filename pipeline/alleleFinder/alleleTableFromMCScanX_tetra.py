@@ -18,6 +18,8 @@ import pandas as pd
 
 from collections import OrderedDict, Counter
 from utils import collinearity
+from utils import alleleTable2AllFrame, alleleTable2AllFrame
+from utils import AllFrame2alleleTable
 
 
 def formatAlleleTable_tetra(cl, anchor_df):
@@ -230,50 +232,6 @@ def remove_dup_in_dup_gene_columns(cl, add_dup_df, dup_genes):
     res_df.reset_index(inplace=True)
     res_df.drop('index', axis=1, inplace=True)
     return res_df
-
-
-def alleleTable2AllFrame(alleleTable_df):
-    """
-    convert allele table dataframe to a dataframe with all dup gene
-    
-    """
-    dup_gene_df = alleleTable_df.dup_gene.str.split(",").apply(pd.Series, 1)
-    dup_gene_df.columns = list(map(lambda x: "dup_gene{}".format(x), dup_gene_df.columns))
-    add_dup_df2 = pd.concat([ dup_gene_df, alleleTable_df], axis=1)
-    add_dup_df2.drop('dup_gene', axis=1, inplace=True)
-    
-    return add_dup_df2
-
-
-def AllFrame2alleleTable(alleleTable_df):
-    """
-    convert all allele table dataframe to a dataframe with one dup gene
-    
-    """
-    dup_gene_columns = alleleTable_df.columns[
-        alleleTable_df.columns.str.find('dup_gene').map(lambda x: x == 0)]
-    def func(x):
-        res = x[dup_gene_columns].dropna()
-        if not res.empty:
-            return ",".join(res)
-        else:
-            return np.nan
-    add_dup_df2 = alleleTable_df.copy()
-    add_dup_df2.drop(dup_gene_columns, axis=1, inplace=True)
-    add_dup_df2['dup_gene'] = alleleTable_df.apply(func, 1).dropna()
-    
-    return add_dup_df2
-
-
-def alleleTable2GeneList(alleleTable_df):
-    """
-    convert allele table dataframe to gene list
-    """
-    genes = []
-    for column in alleleTable_df.columns:
-        l = alleleTable_df[column].dropna().to_list()
-        genes += l
-    return genes
     
 
 def final_rescue_unmap_genes(rmdup_all_df, final_unmap_df):
