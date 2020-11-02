@@ -26,6 +26,9 @@ def main(args):
     pReq.add_argument('infasta', 
             help='input fasta')
     pReq.add_argument('list', help='list of sequences id')
+
+    pOpt.add_argument('-e', '--exclude', action='store_true', 
+            default=False, help='exclude these sequences [default: %(default)s]')
     pOpt.add_argument('-o', '--output', type=argparse.FileType('w'),
             default=sys.stdout, help='output file [default: stdout]')
     pOpt.add_argument('-h', '--help', action='help',
@@ -34,7 +37,8 @@ def main(args):
     args = p.parse_args(args)
 
     id_list = set([i.strip() for i in open(args.list)])
-    extract_fasta(args.infasta, id_list, args.output)
+    extract_fasta(args.infasta, id_list, 
+                    args.output, args.exclude)
 
 
 if __name__ == "__main__":

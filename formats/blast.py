@@ -21,7 +21,7 @@ debug()
 class BlastLine(object):
     def __init__(self, line):
         line_list = line.strip().split()
-        self.qseqid= line_list[0]
+        self.qseqid = line_list[0]
         self.sseqid = line_list[1]
         self.identity = line_list[2]
         self.length = line_list[3]

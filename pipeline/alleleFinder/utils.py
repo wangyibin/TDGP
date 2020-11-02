@@ -163,12 +163,16 @@ class BlockHeader(object):
 
 class collinearity(object):
     def __init__(self, data):
+        self.hap_suffix=['g1', 'g2', 'g3', 'g4']
+        self.length = len(self.hap_suffix[0])
+        self.gene_headers = [ 'gene' + s 
+                             for s in string.ascii_uppercase[:len(self.hap_suffix) ]]
         self.data = data
         if not op.exists(self.data):
             logging.error('No such file of `{}`'.format(self.data))
             sys.exit()
         self.load()
-        
+
     def load(self):
         results = []
         with open(self.data, 'r') as fp:
@@ -183,43 +187,85 @@ class collinearity(object):
                     if block_header:
                         block_pairs = block_header.pairs.split("&")
                         line_list = line.strip().split()
-                        line_list = block_pairs + line_list
+                        line_list = re.split("\s+|-", line.strip())
+                        
+                        line_list = block_pairs + list(filter( lambda x: x!="", line_list))[:4]
                         results.append(line_list)
         self.df = pd.DataFrame(results, columns=['chr1', 'chr2', 'blockN', 'geneN', 
-                            'gene1', 'gene2', 'evalue'])
+                            'gene1', 'gene2'])
         return self.df
     
     @property
     def inter_df(self):
         return self.df.loc[self.df.chr1 != self.df.chr2].reset_index()
-        
+    @property
+    def inter_only_homo_df(self):
+        return self.inter_df.loc[self.inter_df.chr1.str[:-self.length] ==
+                            self.inter_df.chr2.str[:-self.length]].reset_index()   
     @property
     def intra_df(self):
         return self.df.loc[self.df.chr1 == self.df.chr2].reset_index()
     
-    def to_anchor_per_hap(self, hap_suffix=['g1', 'g2', 'g3', 'g4'], 
-                            store=True):
-        length = len(hap_suffix[0])
+    def pairs(self, samples):
+        samples = list(combinations(samples, 2))
+
+        return list(map(lambda x:"{}-{}".format(x[0], x[1]), samples))
+
+    def to_anchor_per_hap(self, only_homo=True, with_chr=False, 
+                          store=True):
+        length = self.length
         anchor_res_db = OrderedDict()
-        df = self.inter_df
-        for pair in pairs(hap_suffix):
+        if only_homo:
+            df = self.inter_only_homo_df
+        else:
+            df = self.inter_df
+       
+        for pair in self.pairs(self.hap_suffix):
             pair_list = pair.split("-")
             tmp_df = df.loc[(df.chr1.str[-length:] == pair_list[0]) &
                             (df.chr2.str[-length:] == pair_list[1])]
-            anchor_res_db[pair] = tmp_df[['gene1', 'gene2']]
-        
+            if with_chr:
+                anchor_res_db[pair] = tmp_df[['chr1', 'chr2', 'gene1', 'gene2']]
+            else:
+                anchor_res_db[pair] = tmp_df[['gene1', 'gene2']]
+            
             if store:
-                out = "{}.collinearity".format(pair)
-                anchor_res_db[pair].to_csv(out, sep='\t', index=None, header=None)
-                logging.debug('Output anchor file in `{}`'.format(out))
-
+                anchor_res_db[pair].to_csv("{}.anchors".format(pair), 
+                                  sep='\t', index=None, header=None)
         if store:
             df = pd.concat(list(anchor_res_db.values()))
-            out = "{}.all.anchors".format(".".join(hap_suffix))
-            df.to_csv(out, sep='\t', index=None, header=None)
-            logging.debug('Output all anchor file in `{}`'.format(out))
-
+            df.to_csv("{}.all.anchors".format(".".join(self.hap_suffix)),
+                     sep='\t', index=None, header=None)
+        
         return anchor_res_db
+    
+    def createEmptyAlleleTable(self):
+        """
+        create a empty dataframe for allele table
+
+        Params:
+        --------
+        chrom_list: `list` or `array-like` list for homologs  tags
+                    e.g. ['Chr01g1', 'Chr01g2', 'Chr01g3', 'Chr01g4']
+        """
+
+        i = len(self.hap_suffix)
+        columns = []
+        for s in string.ascii_uppercase[:i]:
+            columns.append('gene' + s)
+
+        df = pd.DataFrame(columns=columns)
+        return df
+    
+    def formatAlleleTable(self):
+        anchor_res_db = self.to_anchor_per_hap(with_chr=True, store=False)
+        for pair in anchor_res_db:
+            tmp_df = anchor_res_db[pair]
+            hap1, hap2 = pair.split("-")
+            pass 
+#             tmp_df.groupby()
+            
+        
     
         
 
@@ -259,7 +305,7 @@ def split_bed_by_chr(bedfile, outdir='./', prefix=None):
         logging.debug('output new bed in `{}`'.format(out))
 
 
-def extract_fasta(infasta, gene_set, output_handle):
+def extract_fasta(infasta, gene_set, output_handle, exclude=False):
     """
     extract sequences by list
     
@@ -270,7 +316,7 @@ def extract_fasta(infasta, gene_set, output_handle):
     gene_set: `set` or `list-like` 
             gene lists
     output_handle: `handle` of output
-
+    exclude: `bool` if True sequence will be excluded [default: False]
     Returns:
     --------
     write extracted fasta to a fasta file
@@ -286,8 +332,14 @@ def extract_fasta(infasta, gene_set, output_handle):
     
     fa = SeqIO.parse(fp, 'fasta')
     for record in fa:
-        if record.id in gene_set:
-            SeqIO.write(record, output_handle, 'fasta')
+        if exclude:
+            if record.id not in gene_set:
+                SeqIO.write(record, output_handle, 'fasta')
+        else:
+            if record.id in gene_set:
+                SeqIO.write(record, output_handle, 'fasta')
+        
+
 
 
 def rename_gff_by_strings_per_hap(ingff, output_handle, hap_suffix_list=['g1', 'g2', 'g3', 'g4'],
@@ -448,3 +500,33 @@ def import_anchor(anchor):
             index_col=None, comment="#", usecols=[0, 1])
     
     return df
+
+
+def import_blast(blast, noself=True):
+    """
+    import blast file as dataframe
+    """
+    header = ['qseqid', 'sseqid', 'identity', 'length', 
+                'mismatch', 'gap', 'qstart', 'qend', 
+                'sstart', 'send', 'evalue', 'bitscore']
+    
+    df = pd.read_csv(blast, sep='\t', header=None,
+                index_col=None, names=header)
+    
+    if noself:
+        df = df[df.qseqid != df.sseqid]
+    
+    return df
+
+
+def applyParallel(dfGrouped, func, threads=4):
+    """
+    parallel apply a func for pandas groupby 
+    ![https://stackoverflow.com/questions/26187759/parallelize-apply-after-pandas-groupby]
+    """
+    results = Parallel(n_jobs=threads)(delayed(func)(name, group) 
+                                       for name, group in dfGrouped)
+    return pd.concat(results)
+
+
+
