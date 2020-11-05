@@ -206,7 +206,7 @@ def remove_dup_in_dup_gene_columns(cl, add_dup_df, dup_genes):
         if len(tmp_df) < 2:
             continue
         
-        idx_series = tmp_df.apply(lambda x: len(x.dropna()), 1).sort_values()
+        idx_series = tmp_df.apply(lambda x: len(x.dropna()), 1).sort_values(ascending=False)
         idx_series = idx_series.index.to_list()
         for j in  range(0, len(tmp_df) - 1):
             if j == 0:

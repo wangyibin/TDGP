@@ -23,7 +23,8 @@ from pandarallel import pandarallel
 from utils import applyParallel, import_blast
 from utils import alleleTable2AllFrame, alleleTable2GeneList
 from utils import AllFrame2alleleTable, which_hap
-from utils import remove_dup_in_dup_gene_columns
+from utils import remove_dup_from_allele_table, get_dup_genes
+from utils import formatAlleleTable
 
 
 def getAllGeneFromGmap(gene, df):
@@ -133,23 +134,22 @@ def alleleTableFromGmap(args):
     res_df.dup_gene = res_df.dup_gene.apply(lambda x: ",".join(sorted(x)) if x else np.nan)
     res_df = res_df.drop_duplicates()
     res_all_df = alleleTable2AllFrame(res_df)
-    res_all_gene_list = alleleTable2GeneList(res_all_df)
-
+    
     ## remove dup genes
     logging.debug("remove duplicated gene from allele table ...")
-    count = Counter(res_all_gene_list)
-    dup_genes = list(filter(lambda x: count[x] > 1, count))
 
-    rmdup_df = remove_dup_in_dup_gene_columns(res_df, dup_genes)
+    rmdup_all_df = remove_dup_from_allele_table(res_all_df)
+    final_rmdup_all_df = rmdup_all_df.apply(formatAlleleTable, 1, args=(args.gene_headers, ))
+    final_rmdup_all_df = final_rmdup_all_df.dropna(axis=1, how='all')
+    final_rmdup_df = AllFrame2alleleTable(final_rmdup_all_df)
     
-    rmdup_all_df = alleleTable2AllFrame(rmdup_df)
-    rmdup_all_gene_list = alleleTable2GeneList(rmdup_all_df)
-    
-    rmdup_df.to_csv(args.output, sep='\t', 
-                header=0, index=0, na_rep='.')
+    final_rmdup_all_gene_list = alleleTable2GeneList(final_rmdup_all_df)
+
+    final_rmdup_df.to_csv(args.output, sep='\t', 
+                header=True, index=None, na_rep='.')
     logging.debug("Successful, output allele table in `{}`".format(args.output.name))
     with open('alleleTableFromGmap_gene.list', 'w') as out:
-        "\n".join(sorted(set(rmdup_all_gene_list)))
+        print("\n".join(sorted(set(final_rmdup_all_gene_list))), file=out)
     
 
 if __name__ == "__main__":

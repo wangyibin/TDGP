@@ -13,6 +13,7 @@ import os.path as op
 import re
 import sys
 import string
+import numpy as np
 import pandas as pd
 import warnings
 import multiprocessing as mp
@@ -535,8 +536,9 @@ def import_blast(blast, noself=True, onlyid=False):
     
     if noself:
         df = df[df.qseqid != df.sseqid]
+        df.reset_index(inplace=True, drop=True)
         logging.debug('Only load with self pairs.')
-    
+
     return df
 
 
@@ -597,7 +599,7 @@ def remove_dup_in_dup_gene_columns(add_dup_df, dup_genes,
         if len(tmp_df) < 2:
             continue
         
-        idx_series = tmp_df.apply(lambda x: len(x.dropna()), 1).sort_values()
+        idx_series = tmp_df.apply(lambda x: len(x.dropna()), 1).sort_values(ascending=False)
         idx_series = idx_series.index.to_list()
         for j in  range(0, len(tmp_df) - 1):
             if j == 0:
@@ -625,6 +627,166 @@ def remove_dup_in_dup_gene_columns(add_dup_df, dup_genes,
     return res_df
 
 
+def get_dup_genes(add_dup_all_df):
+    all_gene_list = alleleTable2GeneList(add_dup_all_df)
+    count = Counter(all_gene_list)
+    dup_genes = list(set(filter(
+                        lambda x: count[x] > 1, count)))
+    logging.debug("Get duplicated genes {} "
+                  "of Total genes {}".format(len(dup_genes), len(all_gene_list)))
+    return dup_genes
+
+
+def remove_dup_from_allele_table_old(add_dup_all_df, max_iter=5, 
+                        gene_headers=['geneA', 'geneB', 'geneC', 'geneD']):
+    res_df = add_dup_all_df.copy()
+    dup_genes = get_dup_genes(add_dup_all_df)
+    iter_num = 1
+    while (len(dup_genes) > 1) and (iter_num <= max_iter):
+        add_dup_df2 = res_df.copy()
+        rm_idx = []
+        for gene in dup_genes:
+            tmp_df = add_dup_df2.loc[add_dup_df2.isin([gene]).any(1)]
+            if tmp_df.empty:
+                continue
+
+            idx_series = tmp_df.apply(lambda x: len(x.dropna()), 1).sort_values(ascending=False)
+            idx_series = idx_series.index.to_list()
+            for j in  range(0, len(tmp_df) - 1):
+                if j == 0:
+                    idxmax = idx_series[j]
+                    idxmin = idx_series[j + 1]
+                else:
+                    idxmin = idx_series[j + 1]
+                rm_idx.append(idxmin)
+
+                allele_genes = tmp_df.loc[idxmax, gene_headers].to_list()
+                old_dup_genes_series = tmp_df.loc[idxmax].drop(gene_headers).dropna().to_list()
+
+                if isinstance(old_dup_genes_series, float):
+                    old_dup_genes = []
+                else:
+                    old_dup_genes = old_dup_genes_series
+                new_dup_genes = tmp_df.loc[idxmin].dropna().to_list()
+                new_dup_genes = set(new_dup_genes) - set(allele_genes) | set(old_dup_genes) 
+                new_dup_genes = set(new_dup_genes) - set(allele_genes)
+                add_dup_df2.drop(idxmin, 0, inplace=True)
+        
+        
+        res_df.drop(rm_idx, axis=0, inplace=True)
+        res_df.reset_index(inplace=True, drop=True)
+        new_dup_genes = get_dup_genes(res_df)
+        remove_genes_number = len(dup_genes) - len(new_dup_genes)
+        logging.debug("remove {} duplicated genes in iter {}".format(
+                                remove_genes_number, iter_num))
+        dup_genes = new_dup_genes
+        
+        iter_num += 1
+        
+    return res_df
+
+def remove_dup_from_allele_table(add_dup_all_df, iter_max=3,
+                        gene_headers=['geneA', 'geneB', 'geneC', 'geneD']):
+    res_df = add_dup_all_df.copy()
+    dup_genes = get_dup_genes(add_dup_all_df)
+    iter_num = 1
+    while (len(dup_genes) > 10) and (iter_num < iter_max):
+        add_dup_df2 = res_df.copy()
+        rm_idx = []
+        for gene in dup_genes:
+            tmp_df = add_dup_df2.loc[add_dup_df2.isin([gene]).any(1)]
+            if tmp_df.empty:
+                continue
+
+            idx_series = tmp_df.apply(lambda x: len(x[gene_headers].dropna()), 1).sort_values(ascending=False)
+            idx_series = idx_series.index.to_list()
+            
+            idxmax = idx_series[0]
+            idxmin = idx_series[1:] if len(idx_series) > 1 else [idx_series[0]]
+#             for j in  range(0, len(tmp_df) - 1):
+#                 if j == 0:
+#                     idxmax = idx_series[j]
+#                     idxmin = idx_series[j + 1]
+#                 else:
+#                     idxmin = idx_series[j + 1]
+            
+           
+            
+            allele_genes = tmp_df.loc[idxmax, gene_headers].to_list()
+            old_dup_genes_series = tmp_df.loc[idxmax].drop(gene_headers).dropna().to_list()
+
+            if isinstance(old_dup_genes_series, float):
+                old_dup_genes = []
+            else:
+                old_dup_genes = old_dup_genes_series
+
+            new_dup_genes = []
+            for l in tmp_df.loc[idxmin].values.tolist():
+                new_dup_genes += list(filter(lambda x: not isinstance(x, float), l))
+                
+            new_dup_genes = set(new_dup_genes)  - set(allele_genes) | set(old_dup_genes)
+            new_dup_genes = new_dup_genes - set(allele_genes)
+            if len(idx_series) > 1:
+                rm_idx.extend(idxmin)
+                add_dup_df2.drop(idxmin, 0, inplace=True)
+        
+        new_dup_genes = get_dup_genes(res_df)
+        remove_genes_number = len(dup_genes) - len(new_dup_genes)
+        dup_genes = new_dup_genes
+        res_df.drop(rm_idx, axis=0, inplace=True)
+        
+        logging.debug("remove {} duplicated genes in iter {}".format(
+                                remove_genes_number, iter_num))
+        iter_num += 1
+        
+    return res_df
+
+
+def formatAlleleTable(row, gene_headers):
+    dup_genes = row.drop(gene_headers).dropna()
+    dup_genes_headers = row.drop(gene_headers).index
+    new_dup_genes = []
+    for gene in sorted(dup_genes):
+        gene_header = "gene{}".format(which_hap(gene))
+        if gene_header == 'geneNone':
+            continue
+        if isinstance(row[gene_header], float):
+            row[gene_header] = gene
+        elif row[gene_header] == gene:
+            continue
+        else:
+            new_dup_genes.append(gene)
+    row[dup_genes_headers] = dict(zip(dup_genes_headers, new_dup_genes))
+    
+    return row
+                 
+
+def import_allele_table(allele_table, fmt=1):
+    """
+    import allele table
+    
+    Params:
+    --------
+    allele_table: `str` allele table
+    fmt: `int` format of allele table 1 for `dup_gene` 
+            2 for `paralog and tandem
+            
+    Returns:
+    --------
+    out: `dataframe`
+    
+    Examples:
+    --------
+    >>> import_allele_table("allele.table")
+    
+    """
+    
+    df = pd.read_csv(allele_table, sep='\t', 
+                     header=0, index_col=None, 
+                     na_values=".")
+    return df
+
+
 def applyParallel(dfGrouped, func, threads=4):
     """
     parallel apply a func for pandas groupby 
@@ -633,6 +795,3 @@ def applyParallel(dfGrouped, func, threads=4):
     results = Parallel(n_jobs=threads)(delayed(func)(name, group) 
                                        for name, group in dfGrouped)
     return pd.concat(results)
-
-
-
