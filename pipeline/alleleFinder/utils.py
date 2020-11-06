@@ -559,7 +559,7 @@ def alleleTable2AllFrame(alleleTable_df):
     """
     dup_gene_df = alleleTable_df.dup_gene.str.split(",").apply(pd.Series, 1)
     dup_gene_df.columns = list(map(lambda x: "dup_gene{}".format(x), dup_gene_df.columns))
-    add_dup_df2 = pd.concat([ dup_gene_df, alleleTable_df], axis=1)
+    add_dup_df2 = pd.concat([alleleTable_df, dup_gene_df], axis=1)
     add_dup_df2.drop('dup_gene', axis=1, inplace=True)
     
     return add_dup_df2
