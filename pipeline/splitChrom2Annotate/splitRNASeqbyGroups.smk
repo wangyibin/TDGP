@@ -25,6 +25,10 @@ ext = config['ext']
 R1, R2 = ext
 suffix = config['suffix']
 hisat2_k = 4
+
+if not op.exists('data/'):
+    print("[Error]: No such file of data")
+    sys.exit()
 SAMPLES = list(map(op.basename, glob.glob("data/*{}.{}".format(R1, suffix))))
 SAMPLES = list(map(lambda x: x.replace("."+suffix, "").replace("_"+R1, ""), SAMPLES))
 
@@ -37,7 +41,7 @@ rule hisat2build:
     input:
         genome
     output:
-        expand("{genome}.{idx}.ht2", genome=(genome, ), idx=range(1,9))
+        expand("{genome}.{idx}.ht2l", genome=(genome, ), idx=range(1,9))
     log:
         f"logs/{genome}.hisat2-build.log"
     threads: ncpus
@@ -55,7 +59,7 @@ rule getBed:
 
 rule hisat2:
     input:
-        index = expand(f"{genome}.{{idx}}.ht2", idx=range(1,9)),
+        index = expand(f"{genome}.{{idx}}.ht2l", idx=range(1,9)),
         left = f"data/{{sample}}_{R1}.{suffix}",
         right = f"data/{{sample}}_{R2}.{suffix}"
     output:
@@ -67,7 +71,7 @@ rule hisat2:
         k = hisat2_k
     shell:
         "hisat2 -p {threads} -k {params.k} -x {genome} -1 {input.left} "
-        "-2 {input.right} 2>{log} | samtools sort -T hisat2_result/{wildcards.sample} -@ {threads} | " 
+        "-2 {input.right} 2>{log} | samtools sort -T hisat2_result/ -@ 4 | " 
         "samtools view -bhS > {output}"
 
 rule extractFastqFromBam:
