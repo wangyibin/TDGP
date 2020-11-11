@@ -34,7 +34,8 @@ def filter_by_blast(row, allele_table_df, gene_headers):
     dup_gene_df = tmp_df.drop(gene_headers, axis=1)
     if len(tmp_df) < 2:
         if tmp_df.empty:
-            return {0: [np.nan] * len(tmp_df.columns)}
+            return {0: [gene1, gene2] + [np.nan] * (len(dup_gene_df.columns) - 2) \
+                   + [np.nan] * len(gene_headers)}
         else:
             idx, = tmp_df.index.to_list()
             dup_gene_nums = len(dup_gene_df.dropna())

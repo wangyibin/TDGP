@@ -18,7 +18,7 @@ import pandas as pd
 
 from collections import OrderedDict, Counter
 from utils import collinearity
-from utils import alleleTable2AllFrame, alleleTable2AllFrame
+from utils import alleleTable2AllFrame, alleleTable2GeneList
 from utils import AllFrame2alleleTable
 
 

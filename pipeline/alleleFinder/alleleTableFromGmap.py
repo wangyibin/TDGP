@@ -18,23 +18,31 @@ import numpy as np
 
 
 from collections import Counter
+from joblib import Parallel, delayed
 from pandarallel import pandarallel
 
-from utils import applyParallel, import_blast
+from utils import import_blast
 from utils import alleleTable2AllFrame, alleleTable2GeneList
 from utils import AllFrame2alleleTable, which_hap
 from utils import remove_dup_from_allele_table, get_dup_genes
 from utils import formatAlleleTable
 
+def applyParallel(dfGrouped, func, threads=4):
+    """
+    parallel apply a func for pandas groupby
+    ![https://stackoverflow.com/questions/26187759/parallelize-apply-after-pandas-groupby]
+    """
+    results = Parallel(n_jobs=threads)(delayed(func)(name, group) for name, group in dfGrouped)
+    return pd.concat(results)
 
 def getAllGeneFromGmap(gene, df):
     empty_df = pd.DataFrame(columns=['all_gene'], index=[gene])
     query_genes = df[1].to_list()
-    if len(query_genes) < 2:
+    if len(query_genes) < 1:
          return empty_df
     else:
-        empty_df.loc[gene].all_gene = query_genes
-    
+        empty_df.loc[gene]['all_gene'] = query_genes
+
     return empty_df
 
 
@@ -49,9 +57,7 @@ def filter_by_blast(row, blast_df):
         hit_gene_list.add(pair[0])
         hit_gene_list.add(pair[1])
     hit_gene_list = set(hit_gene_list)
-    hap = set(map(which_hap, hit_gene_list))
-    if len(hap) < 2:
-        return []
+    # hap = set(map(which_hap, hit_gene_list))
     hit_gene_list = list(hit_gene_list)
     
     return hit_gene_list
@@ -113,12 +119,13 @@ def alleleTableFromGmap(args):
                     header=None, index_col=0)
     group_df = gmap_gene_df.groupby(0)
     all_gene_df = applyParallel(group_df, getAllGeneFromGmap)
-    all_gene_df = all_gene_df.dropna()
+    all_gene_df = all_gene_df.dropna(how='all')
 
     ## filter gmap result by blast results
     logging.debug("filter all gene by blast result ...")
     pandarallel.initialize(nb_workers=args.threads, verbose=0)
-    all_gene_df['all_gene'] = all_gene_df.parallel_apply(filter_by_blast, 1, args=(blast_df,))
+    
+    all_gene_df['all_gene'] = all_gene_df.parallel_apply(filter_by_blast, axis=1, args=(blast_df,))
     all_gene_df['all_gene'] = all_gene_df.all_gene.apply(lambda d: d if d else np.nan)
     all_gene_df.dropna(inplace=True)
 
