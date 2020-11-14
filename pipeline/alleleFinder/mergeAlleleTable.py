@@ -5,12 +5,13 @@
 merge allele table from synteny and gmap, and filter by blast.
 """
 
-from TDGP.pipeline.alleleFinder.utils import AllFrame2alleleTable, import_allele_table, remove_dup_from_allele_table
+import argparse
+from logging import warn
 import os
 import os.path
 import sys
-import swifter
 import logging
+import warnings
 import pandas as pd
 import numpy as np
 import multiprocessing as mp
@@ -18,8 +19,10 @@ from pandarallel import pandarallel
 from joblib import Parallel, delayed
 
 from collections import OrderedDict, Counter
-from utils import *
+from utils import AllFrame2alleleTable, import_allele_table, remove_dup_from_allele_table
+from utils import import_blast, alleleTable2AllFrame
 
+warnings.filterwarnings("ignore")
 
 def create_empty_allele_all_df(df):
     columns = df.columns
@@ -106,18 +109,19 @@ def mergeAlleleTable(args):
     merge_df.reset_index(drop=True, inplace=True)
 
     merge_all_df = alleleTable2AllFrame(merge_df)
-    rmdup_df = remove_dup_from_allele_table(merge_all_df)
 
-    pandarallel.initialize(nb_workers=args.threads, verbose=0)
-    filter_df = blast_df.parallel_apply(filter_by_blast, axis=1, 
-                    args=(rmdup_df, args.gene_headers))
-    res_df = pd.concat(filter_df.to_frame()[0].map(
-        lambda x: pd.DataFrame.from_dict(x)).to_list(), axis=1).T.dropna(how='all', axis=0)
-    res_df.columns = rmdup_df.columns
-    res_df = res_df.drop_duplicates()
-    res_df.reset_index(inplace=True, drop=True)
-    rmdup_res_df = remove_dup_from_allele_table(res_df)
-    res_df = AllFrame2alleleTable(rmdup_res_df)
+    #rmdup_df = remove_dup_from_allele_table(merge_all_df)
+
+    # pandarallel.initialize(nb_workers=args.threads, verbose=0)
+    # filter_df = blast_df.parallel_apply(filter_by_blast, axis=1, 
+    #                 args=(rmdup_df, args.gene_headers))
+    # res_df = pd.concat(filter_df.to_frame()[0].map(
+    #     lambda x: pd.DataFrame.from_dict(x)).to_list(), axis=1).T.dropna(how='all', axis=0)
+    # res_df.columns = rmdup_df.columns
+    # res_df = res_df.drop_duplicates()
+    # res_df.reset_index(inplace=True, drop=True)
+    # rmdup_res_df = remove_dup_from_allele_table(res_df)
+    res_df = AllFrame2alleleTable(merge_all_df)
     res_df.to_csv(args.output, sep='\t', header=True, 
                 index=None, na_rep='.')
 

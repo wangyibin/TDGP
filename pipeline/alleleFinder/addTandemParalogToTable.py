@@ -59,7 +59,7 @@ def statFinalTableForTetra(res, threads=4):
     gene_headers.remove('chrom')
     gene_headers = ['gene{}'.format(i+1) for i in range(len(gene_headers))]
    
-    stat = applyParallel(res.groupby('chrom'), statFinalTableForTetra_singleChrom, threads).T
+    stat = applyParallel(res.groupby('chrom'), statFinalTableForTetra_singleChrom, threads=threads, axis=1).T
     stat.loc['Gene with annotated alleles'] = stat[gene_headers].sum()
     stat.loc['Gene with annotated alleles']['total'] = stat.loc['Gene with annotated alleles'][gene_headers].sum()
     stat.loc['Duplicated genes'] = stat[['paralogs', 'tandem']].sum()

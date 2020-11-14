@@ -19,7 +19,7 @@ import warnings
 import multiprocessing as mp
 from Bio import SeqIO
 from collections import OrderedDict, Counter
-from itertools import combinations
+from itertools import combinations, permutations
 from joblib import Parallel, delayed
 from pandarallel import pandarallel
 from pandas.core.indexing import convert_from_missing_indexer_tuple
@@ -270,8 +270,13 @@ class collinearity(object):
 #             tmp_df.groupby()
             
         
-    
-        
+def checkFileExists(infile):
+    if not op.exists:
+        logging.error("No such file of `{}`".format(infile))
+        sys.exit()
+    else:
+        logging.debug("Load file of `{}`".format(infile))
+
 
 def pairs(samples):
     samples = list(combinations(samples, 2))
@@ -502,6 +507,13 @@ def create_empty_allele_table(chrom_list):
 
     return df
 
+def import_bed4(bed):
+    columns = ['chrom', 'start', 'end', 'gene']
+    df = pd.read_csv(bed, sep='\t', header=None, 
+                     index_col=0, names=columns)
+    
+    return df
+
 def import_anchor(anchor):
     """
     import anchor file
@@ -559,10 +571,10 @@ def alleleTable2AllFrame(alleleTable_df):
     """
     dup_gene_df = alleleTable_df.dup_gene.str.split(",").apply(pd.Series, 1)
     dup_gene_df.columns = list(map(lambda x: "dup_gene{}".format(x), dup_gene_df.columns))
-    add_dup_df2 = pd.concat([alleleTable_df, dup_gene_df], axis=1)
-    add_dup_df2.drop('dup_gene', axis=1, inplace=True)
-    
-    return add_dup_df2
+    add_dup_df = pd.concat([alleleTable_df, dup_gene_df], axis=1)
+    add_dup_df.drop('dup_gene', axis=1, inplace=True)
+    add_dup_df = add_dup_df.replace(r'^\s*$', np.NaN, regex=True)
+    return add_dup_df
 
 
 def AllFrame2alleleTable(alleleTable_df):
@@ -581,7 +593,8 @@ def AllFrame2alleleTable(alleleTable_df):
     add_dup_df2 = alleleTable_df.copy()
     add_dup_df2.drop(dup_gene_columns, axis=1, inplace=True)
     add_dup_df2['dup_gene'] = alleleTable_df.apply(func, 1).dropna()
-    
+    add_dup_df2 = add_dup_df2.replace(r'^\s*$', np.NaN, regex=True)
+
     return add_dup_df2
 
 def remove_dup_in_dup_gene_columns(add_dup_df, dup_genes, 
@@ -685,12 +698,12 @@ def remove_dup_from_allele_table_old(add_dup_all_df, max_iter=5,
         
     return res_df
 
-def remove_dup_from_allele_table(add_dup_all_df, iter_max=3,
+def remove_dup_from_allele_table(add_dup_all_df, iter_max=3, max_dups=10, 
                         gene_headers=['geneA', 'geneB', 'geneC', 'geneD']):
     res_df = add_dup_all_df.copy()
     dup_genes = get_dup_genes(add_dup_all_df)
     iter_num = 1
-    while (len(dup_genes) > 10) and (iter_num < iter_max):
+    while (len(dup_genes) > max_dups) and (iter_num < iter_max):
         add_dup_df2 = res_df.copy()
         rm_idx = []
         for gene in dup_genes:
@@ -741,6 +754,11 @@ def remove_dup_from_allele_table(add_dup_all_df, iter_max=3,
         
     return res_df
 
+def remove_dup_from_allele_table_single(chrom, df):
+    df = df.drop(['chr'], axis=1)
+    tmp_df = remove_dup_from_allele_table(df, iter_max=3, max_dups=0)
+    tmp_df['chr'] = [chrom] * len(tmp_df)
+    return tmp_df
 
 def formatAlleleTable(row, gene_headers):
     dup_genes = row.drop(gene_headers).dropna()
@@ -760,6 +778,118 @@ def formatAlleleTable(row, gene_headers):
     
     return row
                  
+def find_chrom_for_gmap_genes(row, bed_df):
+    gene = row[0]
+    try:
+        chrom = bed_df.loc[gene].chrom
+    except KeyError:
+        return np.nan
+    return chrom
+
+
+def add_chrom_to_blast_df(blast_df, gff_df, 
+                          threads=4, add_hap=True, 
+                          suffix_len=2):
+
+    logging.debug('Starting add chromosome to blast dataframe...')
+    def find_chrom(row, gff_df):
+        gene1, gene2 = row.qseqid, row.sseqid
+        try: 
+            chr1 = gff_df.loc[gene1].chrom
+        except KeyError:
+            chr1 = np.nan
+        try:
+            chr2 = gff_df.loc[gene2].chrom
+        except:
+            chr2 = np.nan
+        return [chr1, chr2]
+    pandarallel.initialize(nb_workers=threads, verbose=0)
+    blast_df_with_chrom = blast_df.parallel_apply(find_chrom, axis=1, args=(gff_df, ))
+    blast_df['chr1'], blast_df['chr2'] =  zip(*blast_df_with_chrom)
+    if add_hap:
+        blast_df['chr'] = blast_df.chr1.str[:-suffix_len]
+    
+    return blast_df
+        
+
+
+def add_chrom_to_gmap_genes(gmap_gene_df, bed_df, 
+                            remove_tig='tig', threads=4):  
+    pandarallel.initialize(nb_workers=threads, verbose=0)
+    df = gmap_gene_df.reset_index()
+    df['chr'] = df.parallel_apply(find_chrom_for_gmap_genes, axis=1, 
+                                  args=(bed_df, ))
+    
+    if remove_tig:
+        df = df[~df['chr'].str.contains(remove_tig)]
+    
+    df.set_index(0, inplace=True)
+    return df
+
+def getAllGeneFromGmap(gene, df):
+    empty_df = pd.DataFrame(columns=['all_gene'], index=[gene])
+    query_genes = sorted(set(df[1].to_list()))
+    if len(query_genes) == 0:
+         return empty_df
+    else:
+        empty_df.loc[gene].all_gene = query_genes
+    
+    return empty_df
+
+
+def formatAlleleTableFromGmap(row):
+    query_genes = row.all_gene
+    for query_gene in sorted(set(query_genes)):
+        gene_header = "gene{}".format(which_hap(query_gene))
+        if gene_header == 'geneNone':
+            continue
+        if isinstance(row[gene_header], float):
+            row[gene_header] = query_gene
+        else:
+            row['dup_gene'].append(query_gene)
+    row['dup_gene'] = ",".join(row['dup_gene']) if row['dup_gene'] else np.nan
+    return row.drop('all_gene')
+
+def filter_by_blast(row, blast_df):
+    genes = set(row.all_gene)
+    gene_multi_indexes = list(permutations(genes, 2))
+    try:
+        blast_genes = blast_df.loc[blast_df.index.isin(gene_multi_indexes)].index.to_list()
+    except KeyError:
+        return []
+    hit_gene_list = set()
+    for pair in blast_genes:
+        hit_gene_list.add(pair[0])
+        hit_gene_list.add(pair[1])
+    #hit_gene_list = set(hit_gene_list)
+    # hap = set(map(which_hap, hit_gene_list))
+    hit_gene_list = list(hit_gene_list)
+    
+    return hit_gene_list
+
+def filterAndFormatForGmap(gmap_gene_df, blast_df, threads=4, 
+                           gene_headers=['geneA', 'geneB', 'geneC', 'geneD']):
+
+    logging.debug('Starting filter and format allele table from gmap ...')
+    results = []
+    pandarallel.initialize(nb_workers=threads, verbose=0)
+    for chrom, df in gmap_gene_df.groupby('chr'):
+        tmp_blast_df = blast_df.loc[chrom]
+        tmp_blast_df.set_index(['qseqid', 'sseqid'], inplace=True)
+        tmp_df = applyParallel(df.groupby(0), getAllGeneFromGmap, axis=0, threads=threads)
+        tmp_df = tmp_df.apply(filter_by_blast, axis=1, args=(tmp_blast_df, ))
+        tmp_df = tmp_df.to_frame()
+        tmp_df.columns = ['all_gene']
+        tmp_df[gene_headers] = np.nan
+        tmp_df['dup_gene'] = [[] for _ in range(len(tmp_df))]
+        tmp_df = tmp_df.parallel_apply(formatAlleleTableFromGmap, axis=1)
+        tmp_df['chr'] = [chrom] * len(tmp_df)
+        tmp_df.drop_duplicates(inplace=True)
+        results.append(tmp_df)
+        logging.debug('Done with {}'.format(chrom))
+    res_df = pd.concat(results)
+    logging.debug('Done')
+    return res_df
 
 def import_allele_table(allele_table, fmt=1):
     """
@@ -893,17 +1023,17 @@ def formatAlleleTableToFinal(row, gene_headers,
     res['chrom'] = main_chrom
     all_genes = row.dropna().values
     main_genes = row[haps == main_chrom]
-    
     # find tandem
     tandem_genes = find_tandem(main_genes, tandem_df)
     allele_gene_headers = list(set(main_genes.index) & set(gene_headers))
 
-    paralog_genes = row[haps != main_chrom]
-    
+    paralog_genes = set(all_genes) - set(main_genes)
+  
     allele_genes = main_genes[allele_gene_headers]
+
     res[allele_gene_headers] = allele_genes
-    dup_genes = []
-    for query_gene in sorted(all_genes):
+    dup_genes = list(paralog_genes)
+    for query_gene in sorted(main_genes):
         gene_header = "gene{}".format(which_hap(query_gene))
         if gene_header == 'geneNone':
             continue
@@ -913,7 +1043,7 @@ def formatAlleleTableToFinal(row, gene_headers,
             continue
         else:
             dup_genes.append(query_gene)
-  
+    
     dup_tandem_genes =[]
     if tandem_genes:
         for query_gene in sorted(tandem_genes):
@@ -929,7 +1059,7 @@ def formatAlleleTableToFinal(row, gene_headers,
             
             if query_gene in dup_genes:
                 dup_genes.remove(query_gene)
-         
+    
     res['|Paralogs'] = ",".join(dup_genes)
     res['Tandem'] = ','.join(dup_tandem_genes)
     return res
@@ -987,11 +1117,11 @@ def statFinalTableForTetra(chrom, df,
     return ds
 
 
-def applyParallel(dfGrouped, func, threads=4):
+def applyParallel(dfGrouped, func, axis=1, threads=4):
     """
     parallel apply a func for pandas groupby 
     ![https://stackoverflow.com/questions/26187759/parallelize-apply-after-pandas-groupby]
     """
     results = Parallel(n_jobs=threads)(delayed(func)(name, group) 
                                        for name, group in dfGrouped)
-    return pd.concat(results, axis=1)
+    return pd.concat(results, axis=axis)
