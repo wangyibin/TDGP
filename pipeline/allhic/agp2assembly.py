@@ -26,7 +26,7 @@ def import_agp(agpfile, split=True):
     """
     import agp file and return a dataframe
     """
-    df = pd.read_csv(agpfile, sep='\t',
+    df = pd.read_csv(agpfile, sep='\t', comment='#',
                      header=None, index_col=None)
     if split:
         tig_df = df[df[4] == 'W']
