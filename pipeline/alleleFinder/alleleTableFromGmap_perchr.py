@@ -83,7 +83,7 @@ def alleleTableFromGmap(args):
 
     res_df = filterAndFormatForGmap(gmap_gene_df, blast_df, args.threads, 
                                     gene_headers=args.gene_headers)
-    res_df.dropna(subset=gene_headers + ['dup_gene'], inplace=True)
+    res_df.dropna(how='all', subset=args.gene_headers + ['dup_gene'], inplace=True)
     res_df_all = alleleTable2AllFrame(res_df)
     rmdup_df_all = applyParallel(res_df_all.groupby('chr'), 
                     remove_dup_from_allele_table_single, axis=0, 

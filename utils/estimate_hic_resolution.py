@@ -104,7 +104,7 @@ def main(infile, chrom_list,
 
 
 if __name__ == "__main__":
-    p = p=argparse.ArgumentParser(prog=op.basename(__file__),
+    p = argparse.ArgumentParser(prog=op.basename(__file__),
                         description=__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')

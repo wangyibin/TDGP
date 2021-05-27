@@ -257,7 +257,7 @@ def getInteractionScore(args):
 
         Calculate the interaction scores base O/E matrix
     """
-    p = p=argparse.ArgumentParser(prog=getInteractionScore.__name__,
+    p = argparse.ArgumentParser(prog=getInteractionScore.__name__,
                         description=getInteractionScore.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')

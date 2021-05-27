@@ -75,7 +75,7 @@ def validpairs2links(args):
 
         convert hicpro validpairs to 3d-dna pairs
     """
-    p = p=argparse.ArgumentParser(prog=validpairs2links.__name__,
+    p = argparse.ArgumentParser(prog=validpairs2links.__name__,
                         description=validpairs2links.__doc__,
                         formatter_class=argparse.RawTextHelpFormatter,
                         conflict_handler='resolve')

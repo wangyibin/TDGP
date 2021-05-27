@@ -82,6 +82,7 @@ PBS_HEADER = """#!/bin/bash
 #PBS -q {}
 #PBS -V 
 #PBS -l nodes=1:ppn={} {}
+{}
 if [[ ! -z $PBS_O_WORKDIR ]]; then
     cd $PBS_O_WORKDIR
 fi
@@ -115,11 +116,12 @@ class Cluster(object):
     
     def __init__(self, cluster=None, 
                     name=None, queue=None, 
-                    threads=1, array=None):
+                    threads=1, array=None,
+                    memory=None):
         self.CLUSTER = cluster if cluster else None
         if not self.CLUSTER:
             self.get()
-        self.get_header(name, queue, threads, array)
+        self.get_header(name, queue, threads, array, memory)
         self.get_raw_header()
 
     def get(self):
@@ -137,7 +139,8 @@ class Cluster(object):
 
 
     def get_header(self, name=None, queue=None, 
-                        threads=1, array=None):
+                        threads=1, array=None,
+                        memory=None):
         """
         According to the environment of `CLUSTER` to 
             return a header of cluster system
@@ -146,17 +149,21 @@ class Cluster(object):
             name = "\n#$ -N " + name  if name else ""
             queue = queue if queue else "all.q"
             array = "\n#$ -t " + array if array else ""
+            mem = "#$ -l mem_free={}".format(memory) if memory else ""
             self.header = SGE_HEADER.format(name, queue, threads, array)   
+            self.header += mem
         elif self.CLUSTER.upper() == "PBS":
             name = "\n#PBS -N " + name if name else ""
             queue = queue if queue else "workq"
             array = "\n#PBS -J " + array if array else ""
-            self.header = PBS_HEADER.format(name, queue, threads, array)
+            mem = "#PBS -l mem={}".format(memory) if memory else ""
+            self.header = PBS_HEADER.format(name, queue, threads, array, mem)
         elif self.CLUSTER.upper() == "TORQUE":
             name = "\nPBS -N " + name if name else ""
             queue = queue if queue else "share"
             array = "\n#PBS -J " + array if array else ""
-            self.header = PBS_HEADER.format(name, queue, threads, array)
+            mem = "#PBS -l mem={}".format(memory) if memory else ""
+            self.header = PBS_HEADER.format(name, queue, threads, array, mem)
         else:
             logging.warning("there is not of header "
                             "of cluster:`{}`".format(self.CLUSTER))
@@ -192,11 +199,13 @@ def clusterHeader(args):
     %(prog)s 
     print the header of clustes
     """    
-    p = p=argparse.ArgumentParser(prog=clusterHeader.__name__,
+    p = argparse.ArgumentParser(prog=clusterHeader.__name__,
                         description=clusterHeader.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
     pOpt = p.add_argument_group('Optional arguments')
+    pOpt.add_argument('-s', '--command', default="",
+            help='command of scripts [default: %(default)s]')
     pOpt.add_argument('-c', '--cluster', default=None, 
             help='cluster system [default: auto]')
     pOpt.add_argument('-n', '--name', default=None,
@@ -205,6 +214,8 @@ def clusterHeader(args):
             help='queue of cluster [default: auto]')
     pOpt.add_argument('-t', '--threads', default=1, type=int,
             help='threads number of program [default: %(default)s]')
+    pOpt.add_argument('-m', '--memory', default=None,
+            help='memory of program [default: %(default)s]')
     pOpt.add_argument('-a', '--array', default=None, 
             help='array jobs [default: %(default)s]')
     pOpt.add_argument('-h', '--help', action='help',
@@ -213,9 +224,9 @@ def clusterHeader(args):
     args = p.parse_args(args)
     cluster = Cluster(args.cluster, args.name, 
                              args.queue, args.threads,
-                            args.array)
+                            args.array, args.memory)
     print(cluster.header, file=sys.stdout)
-
+    print(args.command, file=sys.stdout)
 
 
 

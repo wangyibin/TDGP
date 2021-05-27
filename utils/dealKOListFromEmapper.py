@@ -16,7 +16,7 @@ import sys
 
 def dealKOListFromEmapper(args):
 
-    p = p=argparse.ArgumentParser(prog=dealKOListFromEmapper.__name__,
+    p = argparse.ArgumentParser(prog=dealKOListFromEmapper.__name__,
                         description=dealKOListFromEmapper.__doc__,
                         formatter_class=argparse.RawTextHelpFormatter,
                         conflict_handler='resolve')

@@ -10,6 +10,7 @@ import os
 import os.path as op
 import sys
 import scipy
+import numpy as np
 import matplotlib as mpl
 mpl.use("Agg")
 import matplotlib.pyplot as plt
@@ -94,12 +95,13 @@ def plotMultiLR(data, species, output='out_multiSpecies', workdir='./', ncols=5)
         axes = trim_axes(axes, len(data))
     for i, pairs in enumerate(data):
         bg1, bg2 = data[pairs]
+        
         ax = plotLineRegress(axes[i], bg1.score, bg2.score, 
                                  xlabel=pairs[0], ylabel=pairs[1])
     savefig("{}/{}".format(workdir, output), bbox_inches='tight')
 
 def main(args):
-    p = p=argparse.ArgumentParser(prog=__file__,
+    p = argparse.ArgumentParser(prog=__file__,
                         description=__doc__,
                         formatter_class=argparse.RawTextHelpFormatter,
                         conflict_handler='resolve')

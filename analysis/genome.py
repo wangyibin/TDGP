@@ -403,7 +403,7 @@ def calGC(args):
         calculate GC content.
     """
 
-    p = p=argparse.ArgumentParser(prog=calGC.__name__,
+    p = argparse.ArgumentParser(prog=calGC.__name__,
                         description=calGC.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')

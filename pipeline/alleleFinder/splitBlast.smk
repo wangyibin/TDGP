@@ -54,7 +54,7 @@ rule makeblastdb:
 rule splitBlast:
     input:
         fa = f"{query}.split/{{sample}}",
-        index = expand("{fasta}.{suffix}", fasta=(query, ), suffix=suffix)
+        index = expand("{fasta}.{suffix}", fasta=(fasta, ), suffix=suffix)
     output:
         temp("{sample}.tmp.blast")
     log: 

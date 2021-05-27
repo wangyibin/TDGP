@@ -36,7 +36,7 @@ def allelicTableToList(args):
     %(prog)s allelic.table [Options]
 
     """
-    p = p=argparse.ArgumentParser(prog=allelicTableToList.__name__,
+    p = argparse.ArgumentParser(prog=allelicTableToList.__name__,
                         description=allelicTableToList.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')

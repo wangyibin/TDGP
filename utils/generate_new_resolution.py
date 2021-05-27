@@ -80,7 +80,7 @@ def main(args):
 
 
 if __name__ == "__main__":
-    p = p=argparse.ArgumentParser(prog=__file__,
+    p = argparse.ArgumentParser(prog=__file__,
                         description=__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')

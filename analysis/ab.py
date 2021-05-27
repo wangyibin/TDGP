@@ -249,7 +249,7 @@ class ABComparisionSpecies(object):
         >>> ABC.getSyntenyGenePca(bg1, bg2, bed1, bed2)
         """
         list(map(check_file_exists, (bg1, bg2, bed1, bed2)))
-        bedtools_formatter = "bedtools intersect -a {} -b {} -wao -f 0.5 | cut -f 1-4,8 > {}\n"
+        bedtools_formatter = "bedtools intersect -a {} -b {} -wao -f 0.51 | cut -f 1-4,8 > {}\n"
         grep_formatter = "grep -n -w '\.' {} | cut -d ':' -f 1"
         out_formatter = "{}.synteny.eigen1.bg"
         cut_pca_formatter = "cut -f 5 {0}.synteny.eigen1.bg > {0}.pca1 \n"
@@ -262,12 +262,14 @@ class ABComparisionSpecies(object):
         bedtools_cmd2 = bedtools_formatter.format(bed2, bg2, 
                             out2)
         list(map(os.system, (bedtools_cmd1, bedtools_cmd2)))
+        
         grep_cmd1 = grep_formatter.format(out1)
         grep_cmd2 = grep_formatter.format(out2)
         miss_line_number1 = [i.strip() for i in os.popen(grep_cmd1)]
         miss_line_number2 = [i.strip() for i in os.popen(grep_cmd2)]
         miss_line_number = [*miss_line_number1, *miss_line_number2]
         sed_formatter = "sed -i '{}d' {}"
+        
         for line in miss_line_number:
             logging.warning('Line {} is missing, have removed'.format(line))
             os.system(sed_formatter.format(line, out1))
@@ -533,7 +535,6 @@ def two_species_conserved_compare(tgy_df, jgy_df, method='length'):
         value = length_df.iloc[i] if method == 'length' else 1
         db[switch_type(v1, v2)] += value
     
-    
     return db
 
 
@@ -643,14 +644,14 @@ def plot_two_species_ab_pie(tgy_df, jgy_df, out, method='length'):
     func = func_length if method == 'length' else func_number
     labels = list(map(func, db.items()))
     colors = ['#265e8a', '#032F49','#BB4853', '#209093','#a83836',]
-    mpl.rc('font', size=16.0)
+    mpl.rc('font', size=24.0)
     plt.figure(figsize=(10,10))
     _, texts, autotexts = plt.pie(db.values(), labels=labels, colors=colors, autopct='%1.2f%%')
     for autotext in autotexts:
         autotext.set_color('white')
-        autotext.set_fontsize(20)
-    plt.savefig(out, dpi=300)
-    plt.savefig(out.rsplit('.', 1)[0] + '.png', dpi=300)
+        autotext.set_fontsize(28)
+    plt.savefig(out, dpi=300, bbox_inches='tight')
+    plt.savefig(out.rsplit('.', 1)[0] + '.png', bbox_inches='tight', dpi=300)
 
 ## outside command ##
 def plotLineRegress(args):
@@ -821,7 +822,7 @@ def getSyntenyGenePca(args):
         the pipeline of get synteny gene ab pc1 value.
     """
 
-    p = p=argparse.ArgumentParser(prog=getSyntenyGenePca.__name__,
+    p = argparse.ArgumentParser(prog=getSyntenyGenePca.__name__,
                         description=getSyntenyGenePca.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -852,7 +853,7 @@ def annotateType(args):
             chrom start end value
     """
 
-    p = p=argparse.ArgumentParser(prog=annotateType.__name__,
+    p = argparse.ArgumentParser(prog=annotateType.__name__,
                         description=annotateType.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -886,7 +887,7 @@ def annotateSwitchType(args):
         ** infile format:
             chrom1 start1 end1 value1 chrom2 start2 end2 value2
     """
-    p = p=argparse.ArgumentParser(prog=annotateSwitchType.__name__,
+    p = argparse.ArgumentParser(prog=annotateSwitchType.__name__,
                         description=annotateSwitchType.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -916,7 +917,7 @@ def plotMultiLineRegress(args):
         To plot four switch type line regression plot in a picture
 
     """
-    p = p=argparse.ArgumentParser(prog=plotMultiLineRegress.__name__,
+    p = argparse.ArgumentParser(prog=plotMultiLineRegress.__name__,
                         description=plotMultiLineRegress.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -944,7 +945,7 @@ def plotSwitchPie(args):
         **infile:
             chrom start end value
     """
-    p = p=argparse.ArgumentParser(prog=plotSwitchPie.__name__,
+    p = argparse.ArgumentParser(prog=plotSwitchPie.__name__,
                         description=plotSwitchPie.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -954,7 +955,7 @@ def plotSwitchPie(args):
     pReq.add_argument('-o', '--out', required=True,
             help='output file')
     pOpt.add_argument('-m', '--method', choices=['length', 'count'],
-            default='length', 
+            default='count', 
             help='method of label [default: %(default)s]')
     pOpt.add_argument('-h', '--help', action='help',
             help='show help message and exit.') 
@@ -970,7 +971,7 @@ def plotEnrichment(args):
     """
     %(prog)s [Options]
     """
-    p = p=argparse.ArgumentParser(prog=plotEnrichment.__name__,
+    p = argparse.ArgumentParser(prog=plotEnrichment.__name__,
                         description=plotEnrichment.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -1066,7 +1067,7 @@ def plotStrength(args):
     """
     %(prog)s [Options]
     """
-    p = p=argparse.ArgumentParser(prog=plotEnrichment.__name__,
+    p = argparse.ArgumentParser(prog=plotEnrichment.__name__,
                         description=plotEnrichment.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -1181,7 +1182,7 @@ def plotLRPerChrom(args):
         To plot barplot of two sample pca1 linregression per chromosome.
     """
     
-    p = p=argparse.ArgumentParser(prog=plotLRPerChrom.__name__,
+    p = argparse.ArgumentParser(prog=plotLRPerChrom.__name__,
                         description=plotLRPerChrom.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -1325,7 +1326,7 @@ def statAB_old(args):
         Stat A/B compartments per chromosome and total.
 
     """
-    p = p=argparse.ArgumentParser(prog=statAB_old.__name__,
+    p = argparse.ArgumentParser(prog=statAB_old.__name__,
                         description=statAB_old.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -1370,7 +1371,7 @@ def statAB(args):
         Also can visualization the use through `--plot`.
 
     """
-    p = p=argparse.ArgumentParser(prog=statAB.__name__,
+    p = argparse.ArgumentParser(prog=statAB.__name__,
                         description=statAB.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -1478,7 +1479,7 @@ def buscoGeneDist(args):
         To analysis busco gene distribution between A and B.
     """
 
-    p = p=argparse.ArgumentParser(prog=buscoGeneDist.__name__,
+    p = argparse.ArgumentParser(prog=buscoGeneDist.__name__,
                         description=buscoGeneDist.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -1570,7 +1571,7 @@ def getSwitchLink(args):
             chrom start end value
         
     """
-    p = p=argparse.ArgumentParser(prog=getSwitchLink.__name__,
+    p = argparse.ArgumentParser(prog=getSwitchLink.__name__,
                         description=getSwitchLink.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -1654,7 +1655,7 @@ def plotBoxPerChrom(args):
         scientific count: `"$10 \times 6$"`
     """
 
-    p = p=argparse.ArgumentParser(prog=plotBoxPerChrom.__name__,
+    p = argparse.ArgumentParser(prog=plotBoxPerChrom.__name__,
                         description=plotBoxPerChrom.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -1683,7 +1684,9 @@ def plotBoxPerChrom(args):
     ab_df['score'] = ab_df['score'] / float(args.scale)
     if not args.chrom:
         chrom_list = sorted(set(ab_df.chrom))
-    
+    else:
+        chrom_list = args.chrom
+    ab_df = ab_df[ab_df['chrom'].isin(chrom_list)]    
     fig, ax = plt.subplots(figsize=(10, 5))
     sns.boxplot(x='chrom', y='score', 
             data=ab_df, hue='type', 
@@ -1719,7 +1722,9 @@ def plotBoxPerChrom(args):
         plt.text(i, h , star, fontsize=12, ha='center')
     if not  args.out:
         out = op.basename(args.bg).rsplit('.', 1)[0] + '_perchrom.pdf'
-    
+    else:
+        out = args.out
+
     plt.savefig(out, dpi=300, bbox_inches='tight')
     plt.savefig(out.rsplit('.', 1)[0] + '.png', 
             dpi=300, bbox_inches='tight')
@@ -1740,7 +1745,7 @@ def plotBoxMultiSamples(args):
         scientific count: `"$10 \times 6$"`
     """
 
-    p = p=argparse.ArgumentParser(prog=plotBoxMultiSamples.__name__,
+    p = argparse.ArgumentParser(prog=plotBoxMultiSamples.__name__,
                         description=plotBoxMultiSamples.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')

@@ -22,7 +22,7 @@ def json2yaml(args):
         example:
             %(prog)s example.json > example.yaml
     """
-    p = p=argparse.ArgumentParser(prog=json2yaml.__name__,
+    p = argparse.ArgumentParser(prog=json2yaml.__name__,
                         description=json2yaml.__doc__,
                         formatter_class=argparse.RawTextHelpFormatter,
                         conflict_handler='resolve')

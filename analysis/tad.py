@@ -1022,7 +1022,7 @@ def quickPlotTAD(args):
 
     """
 
-    p=argparse.ArgumentParser(prog=quickPlotTAD.__name__,
+    p = argparse.ArgumentParser(prog=quickPlotTAD.__name__,
                         description=quickPlotTAD.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -1040,6 +1040,8 @@ def quickPlotTAD(args):
             help='hicmatrix depth [default: window*1.2].')
     pOpt.add_argument('-w', '--window', type=float, default=5e6,
             help='window of chromosome sizes [default: %(default)s]')
+    pOpt.add_argument('--trackFile', default=None, 
+            help='use existed trackfile [defalut: %(default)s]')
     pOpt.add_argument('-o', '--outdir', default='quickPlotTAD_result',
             help='outdir of result [default: %(default)s]')
     pOpt.add_argument('--pdf', default=False, action='store_true',
@@ -1089,11 +1091,16 @@ def quickPlotTAD(args):
     cf.set('x-axis', 'where', 'bottom')
     if not op.exists(args.outdir):
         os.makedirs(args.outdir)
-    with open('{}/quickPlotTAD.tad.ini'.format(args.outdir), 'w+') as f:
-        cf.write(f)
-    
+    if not args.trackFile:
+        trackFile = '{}/quickPlotTAD.tad.ini'.format(args.outdir)
+        with open(trackFile, 'w+') as f:
+            cf.write(f)
+        
+    else:
+        trackFile = args.trackFile
+
     chrom_windows_db = makeChromWindows(args.chrom_size, args.window)
-    plot_cmd_formatter = "pyGenomeTracks --tracks {1}/quickPlotTAD.tad.ini -o {1}/{3}.{2} --region {0}"
+    plot_cmd_formatter = "pyGenomeTracks --tracks {4} -o {1}/{3}.{2} --region {0}"
     
     ext = 'pdf' if args.pdf else 'png'
     
@@ -1101,7 +1108,7 @@ def quickPlotTAD(args):
         for (start, end) in chrom_windows_db[chrom]:
             region = '{}:{}-{}'.format(chrom, start, end)
             outprefix = '{}-{}-{}'.format(chrom, start, end)
-            print(plot_cmd_formatter.format(region, args.outdir, ext, outprefix),
+            print(plot_cmd_formatter.format(region, args.outdir, ext, outprefix, trackFile),
                     file=sys.stdout)
     
 

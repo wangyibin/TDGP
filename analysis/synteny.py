@@ -49,7 +49,7 @@ def convertAnchorsToLink(args):
         To convert anchors file to link bed file, which is generate
             from jcvi
     """
-    p = p=argparse.ArgumentParser(prog=convertAnchorsToLink.__name__,
+    p = argparse.ArgumentParser(prog=convertAnchorsToLink.__name__,
                         description=convertAnchorsToLink.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -100,7 +100,7 @@ def getSyntenyBlock(args):
     
     """
 
-    p = p=argparse.ArgumentParser(prog=getSyntenyBlock.__name__,
+    p = argparse.ArgumentParser(prog=getSyntenyBlock.__name__,
                         description=getSyntenyBlock.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')

@@ -85,35 +85,24 @@ rule round1_bwa_mem:
         fq1 = expand("data/{{sample}}_{tag}.{fq_suffix}", tag=[tag1], fq_suffix=[fq_suffix]),
         fq2 = expand("data/{{sample}}_{tag}.{fq_suffix}", tag=[tag2], fq_suffix=[fq_suffix])
     output:
-        "1.bwa_result/{sample}_1st.bam"
+        temp("1.bwa_result/{sample}_1st.sorted.bam")
     log:
         "logs/{sample}_bwa_mem_1st.log"
-    threads: ncpus
+    threads: 4
     shell:
         "bwa mem -t {threads} {FA} {input.fq1} {input.fq2} 2>{log} | "
-        "samtools view -@ {threads} -bhS - > {output} 2>{log}"
+        "samtools sort -@ {threads} > {output} 2>{log}"
 
 rule round1_bam_merge:
     input:
-        expand("1.bwa_result/{sample}_1st.bam", sample=SAMPLES)
+        expand("1.bwa_result/{sample}_1st.sorted.bam", sample=SAMPLES)
     output:
-        expand("1.bwa_result/{name}_1st.merged.bam", name=config['sample'])
+        expand("1.bwa_result/{name}_1st.sorted.bam", name=config['sample'])
     log:
         expand("logs/{name}_1st.merged.log", name=config['sample'])
     threads: ncpus
     shell:
         "samtools merge -@ {threads} {output} {input} 2>{log}"
-
-rule round1_bam_sort:
-    input:
-        "1.bwa_result/{sample}_1st.merged.bam"
-    output:
-        "1.bwa_result/{sample}_1st.sorted.bam"
-    log:
-        "logs/{sample}_1st.sorted.bam"
-    threads: ncpus
-    shell:
-        "samtools sort -@ {threads} {input} > {output} 2>{log}"
 
 rule round1_bam_index:
     input:
@@ -151,40 +140,53 @@ rule corrected_fa_index:
     shell:
         "samtools faidx {input} & bwa index -a bwtsw {input} 2>{log}"
 
-
 rule round2_bwa_mem:
     input:
         fabwt = lambda wildcards: "{}.HiCcorrected.fasta.bwt".format(SAMPLE),
         fq1 = expand("data/{{sample}}_{tag}.{fq_suffix}", tag=[tag1], fq_suffix=[fq_suffix]),
         fq2 = expand("data/{{sample}}_{tag}.{fq_suffix}", tag=[tag2], fq_suffix=[fq_suffix])
     output:
-        "2.bwa_result/{sample}.bam"
+        "2.bwa_result/{sample}.sorted.bam"
     log:
         "logs/{sample}_bwa_mem_2st.log"
-    threads: ncpus
+    threads: 4
     shell:
         "bwa mem -t {threads} {FA} {input.fq1} {input.fq2} 2>{log} | "
-        "samtools view -@ {threads} -bhS - > {output} 2>{log}"
+        "samtools sort -@ {threads} - > {output} 2>{log}"
 
 rule round2_bam_merge:
     input:
-        expand("2.bwa_result/{sample}.bam", sample=SAMPLES)
+        expand("2.bwa_result/{sample}.sorted.bam", sample=SAMPLES)
     output:
-        expand("allhic_result/{name}.merged.bam", name=config['sample'])
+        temp(expand("allhic_result/{name}.merged.bam", name=config['sample']))
     log:
         expand("logs/{name}_2st.merged.log", name=config['sample'])
     threads: ncpus
     shell:
         "samtools merge -@ {threads} {output} {input} 2>{log}"
 
-rule partition:
+rule preprocess_bam:
     input:
-        bam =  expand("allhic_result/{name}.merged.bam", name=config['sample']),
+        bam = expand("allhic_result/{name}.merged.bam", name=SAMPLE),
         fasta = lambda wildcards: "{}.HiCcorrected.fasta".format(SAMPLE)
     output:
-        expand("allhic_result/{sample}.merged.counts_{enzyme_base}.{N}g{n}.txt",
+        expand("allhic_result/{name}.merged.REduced.paired_only.bam", name=SAMPLE)
+    log:
+        lambda wildcards: "logs/{}.preprocess.log".format(SAMPLE)
+    params:
+       enzyme = config["enzyme"]
+    threads: ncpus
+    shell:
+        "PreprocessSAMs.pl {input.bam} {input.fasta} {params.enzyme} {threads} 2>&1 1>{log}"
+
+rule partition:
+    input:
+        bam =  expand("allhic_result/{name}.merged.REduced.paired_only.bam", name=SAMPLE),
+        fasta = lambda wildcards: "{}.HiCcorrected.fasta".format(SAMPLE)
+    output:
+        expand("allhic_result/{sample}.merged.REduced.paired_only.counts_{enzyme_base}.{N}g{n}.txt",
             sample=(SAMPLE,), enzyme_base=(enzyme_base,), N=(N,), n=range(1,N+1)),
-        expand("allhic_result/{sample}.merged.clm", sample=(SAMPLE, ))
+        expand("allhic_result/{sample}..REduced.paired_only.clm", sample=(SAMPLE, ))
     log:
         "logs/{}.partition.log".format(SAMPLE)
     shell:

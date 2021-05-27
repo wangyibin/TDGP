@@ -1,0 +1,18 @@
+## fasta file
+genome:
+        reference.fasta
+
+## output file prefix
+sample:
+        - WDAMAI
+## threads of program
+ncpus:
+        12
+
+## tag of fastq file 
+tag:
+        - R1
+        - R2
+## suffix of fastq file
+fq_suffix:
+        fastq.gz

@@ -129,7 +129,7 @@ def plotBoxPlot(data, resolution_string, output, dpi=300):
                 bbox_inches='tight', dpi=dpi)
 
 def main(args):
-    p = p=argparse.ArgumentParser(prog=__file__,
+    p = argparse.ArgumentParser(prog=__file__,
                         description=__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')

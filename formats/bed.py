@@ -8,6 +8,7 @@ bed format and some util tools.
 """
 from __future__ import print_function
 
+import argparse
 import os.path as op
 import os
 import pandas as pd
@@ -22,7 +23,7 @@ def main():
 
     actions = (
             ("randomBed", "random select several gene from bed file."),
-            ("test", "test")
+            ("countBedByChr", "count bed file by chromosome"),
         )
     p = ActionDispatcher(actions)
     p.dispatch(globals())
@@ -41,9 +42,49 @@ class BedpeLine(object):
         self.strand2 = '.'
         self.other = []
 
+def import_bed6(bed, sort=False):
+    """
+    import 6-columns bed file
+    """
+    names = ['chrom', 'start', 'end', 
+                'name', 'score', 'strand']
+    df = pd.read_csv(bed, sep='\t', header=None,
+                    index_col=None, names=names)
+    
+    if sort:
+        df = df.sort_values(by=['chrom', 'start'])
+    
+    return df
 
+
+    
 
 ## out command
+def countBedByChr(args):
+    """
+    %(prog)s <bed> [Options]
+        count bed file by chromosome
+    """
+
+    p = argparse.ArgumentParser(prog=countBedByChr.__name__,
+                        description=countBedByChr.__doc__,
+                        formatter_class=argparse.RawTextHelpFormatter,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('bed', 
+            help='input bed file')
+    pOpt.add_argument('-o', '--output', type=argparse.FileType('w'),
+            default=sys.stdout, help='output file [default: stdout]')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    
+    args = p.parse_args(args)
+
+    df = import_bed6(args.bed)
+    df = df.groupby('chrom').size().reset_index(name='counts')
+
+    df.to_csv(args.output, sep='\t', header=None, index=None)
 
 def random_select(args):
     """
@@ -51,7 +92,7 @@ def random_select(args):
 
         random select several genes from bed file.
     """
-    p = p=argparse.ArgumentParser(prog=__file__,
+    p = argparse.ArgumentParser(prog=__file__,
                         description=random_select.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')

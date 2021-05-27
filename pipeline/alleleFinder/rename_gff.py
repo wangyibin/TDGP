@@ -18,7 +18,7 @@ import gzip
 from utils import rename_gff_by_strings, rename_gff_by_strings_per_hap
 
 def main(args):
-    p = p=argparse.ArgumentParser(prog=__file__,
+    p = argparse.ArgumentParser(prog=__file__,
                         description=__doc__,
                         formatter_class=argparse.RawTextHelpFormatter,
                         conflict_handler='resolve')

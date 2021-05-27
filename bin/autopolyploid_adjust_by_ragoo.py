@@ -89,7 +89,7 @@ def autopolyploid_adjust_by_ragoo(args):
     %(prog)s <adjust.table> [Options]
         run autopolyploid adjust by ragoo
     """
-    p = p=argparse.ArgumentParser(prog=autopolyploid_adjust_by_ragoo.__name__,
+    p = argparse.ArgumentParser(prog=autopolyploid_adjust_by_ragoo.__name__,
                         description=autopolyploid_adjust_by_ragoo.__doc__,
                         formatter_class=argparse.RawTextHelpFormatter,
                         conflict_handler='resolve')

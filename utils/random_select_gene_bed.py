@@ -23,7 +23,7 @@ def random_select(args):
 
         random select several genes from bed file.
     """
-    p = p=argparse.ArgumentParser(prog=__file__,
+    p = argparse.ArgumentParser(prog=__file__,
                         description=random_select.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')

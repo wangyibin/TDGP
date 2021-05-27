@@ -36,7 +36,7 @@ def karyotype(args):
         generate karyotype file for circos
     """
 
-    p = p=argparse.ArgumentParser(prog=karyotype.__name__,
+    p = argparse.ArgumentParser(prog=karyotype.__name__,
                         description=karyotype.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')

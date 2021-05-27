@@ -86,10 +86,10 @@ rule bwa_aln:
         fabwt = lambda wildcards: "{}.bwt".format(FA),
         fq = expand("data/{{sample}}.{fq_suffix}", fq_suffix=[fq_suffix])
     output:
-        "bwa_result/{sample}.sai"
+        temp("bwa_result/{sample}.sai")
     log:
         "logs/{sample}.log"
-    threads: ncpus
+    threads: 4
     shell:
         "bwa aln -t {threads} {FA} {input.fq} > {output} 2>{log}"
 
@@ -100,7 +100,7 @@ rule bwa_sampe:
         sai = expand("bwa_result/{{sample}}_{tag}.sai", tag=config["tag"]),
         
     output:
-        "bwa_result/{sample}.bwa_sampe.bam"
+        temp("bwa_result/{sample}.bwa_sampe.bam")
     log:
         "logs/{sample}.bwa_sampe.log"
     shell:
@@ -110,20 +110,21 @@ rule preprocess_bam:
     input:
         bam = "bwa_result/{sample}.bwa_sampe.bam"
     output:
-        "bwa_result/{sample}.bwa_sampe.REduced.paired_only.bam"
+        temp("bwa_result/{sample}.bwa_sampe.REduced.paired_only.bam")
     log:
         "logs/{sample}.preprocess.log"
     params:
        enzyme = config["enzyme"]
+    threads: 4
     shell:
-        "PreprocessSAMs.pl {input} {FA} {params.enzyme} 2>&1 1>{log}"
+        "PreprocessSAMs.pl {input} {FA} {params.enzyme} 4 2>&1 1>{log}"
 
 
 rule filter_bam:
     input:
         "bwa_result/{sample}.bwa_sampe.REduced.paired_only.bam"
     output:
-        "bwa_result/{sample}.clean.sam"
+        temp("bwa_result/{sample}.clean.sam")
     log:
         "logs/{sample}.filter.log"
     shell:
@@ -133,7 +134,7 @@ rule sam2bam:
     input:
         "bwa_result/{sample}.clean.sam"
     output:
-        "bwa_result/{sample}.clean.bam"
+        temp("bwa_result/{sample}.clean.bam")
     log:
         "logs/{sample}.sam2bam.log"
     threads: ncpus
@@ -212,7 +213,7 @@ rule optimize:
         "allhic_result/group{n}.tour"
     log:
         "logs/group{n}_optimize.log"
-    threads: ncpus
+    threads: 4
     shell:
         "allhic optimize {input.txt} {input.clm} 1>{log} 2>&1"
 

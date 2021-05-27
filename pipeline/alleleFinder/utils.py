@@ -49,12 +49,15 @@ def debug(level=logging.DEBUG):
     """
     Basic config logging format
     """
+    
     from TDGP.apps.font import magenta, green, yellow, white
     formats = white("%(asctime)s") 
     formats += magenta(" <%(module)s:%(funcName)s>")
     formats += white(" [%(levelname)s]")
     formats += yellow(" %(message)s")
     logging.basicConfig(level=level, format=formats, datefmt="[%Y-%m-%d %H:%M:%S]")
+    logging.getLogger('numpy').setLevel(logging.ERROR)
+    logging.getLogger('numexpr').setLevel(logging.ERROR)
 
 debug()
 
@@ -206,6 +209,10 @@ class collinearity(object):
         return self.inter_df.loc[self.inter_df.chr1.str[:-self.length] ==
                             self.inter_df.chr2.str[:-self.length]].reset_index()   
     @property
+    def inter_diff_chrom_df(self):
+        return self.inter_df[self.inter_df.chr1.str[:-self.length] != 
+                            self.inter_df.chr2.str[:-self.length]].reset_index()
+    @property
     def intra_df(self):
         return self.df.loc[self.df.chr1 == self.df.chr2].reset_index()
     
@@ -319,7 +326,31 @@ def which_hap(gene, sep="|"):
     else:
         return
 
+def get_unmap_genes(total_genes, mapped_genes):
+    
+    unmap_genes = total_genes - mapped_genes
+    logging.debug('Get {} unmapped genes from allele table'.format(len(unmap_genes)))
+    return unmap_genes
 
+def get_headers_from_allele_table(df):
+    """
+    get gene headers from allele table dataframe
+    """
+    gene_headers = df.columns.to_list()
+    gene_headers.remove('dup_gene')
+
+    return gene_headers
+
+def get_headers_from_final_table(df):
+    """
+    get gene headers from final table dataframe
+    """
+    gene_headers = df.columns.to_list()
+    gene_headers.remove('|Paralogs')
+    gene_headers.remove('Tandem')
+    gene_headers.remove('chrom')
+
+    return gene_headers
 
 def extract_fasta(infasta, gene_set, output_handle, exclude=False):
     """
@@ -715,16 +746,8 @@ def remove_dup_from_allele_table(add_dup_all_df, iter_max=3, max_dups=10,
             idx_series = idx_series.index.to_list()
             
             idxmax = idx_series[0]
-            idxmin = idx_series[1:] if len(idx_series) > 1 else [idx_series[0]]
-#             for j in  range(0, len(tmp_df) - 1):
-#                 if j == 0:
-#                     idxmax = idx_series[j]
-#                     idxmin = idx_series[j + 1]
-#                 else:
-#                     idxmin = idx_series[j + 1]
-            
-           
-            
+            idxmin = idx_series[1:] if len(idx_series) > 1 else [idx_series[0]
+                      
             allele_genes = tmp_df.loc[idxmax, gene_headers].to_list()
             old_dup_genes_series = tmp_df.loc[idxmax].drop(gene_headers).dropna().to_list()
 
@@ -807,7 +830,7 @@ def add_chrom_to_blast_df(blast_df, gff_df,
     blast_df_with_chrom = blast_df.parallel_apply(find_chrom, axis=1, args=(gff_df, ))
     blast_df['chr1'], blast_df['chr2'] =  zip(*blast_df_with_chrom)
     if add_hap:
-        blast_df['chr'] = blast_df.chr1.str[:-suffix_len]
+        blast_df['chr'] = blast_df.chr2.str[:-suffix_len]
     
     return blast_df
         
@@ -850,8 +873,11 @@ def formatAlleleTableFromGmap(row):
     row['dup_gene'] = ",".join(row['dup_gene']) if row['dup_gene'] else np.nan
     return row.drop('all_gene')
 
+
 def filter_by_blast(row, blast_df):
     genes = set(row.all_gene)
+    if len(genes) <= 1:
+        return list(genes)
     gene_multi_indexes = list(permutations(genes, 2))
     try:
         blast_genes = blast_df.loc[blast_df.index.isin(gene_multi_indexes)].index.to_list()
@@ -934,9 +960,9 @@ def import_allele_table(allele_table, fmt=1):
     Examples:
     --------
     >>> import_allele_table("allele.table")
-    
+    >>> import_allele_table("final.table", fmt=2)
     """
-    
+
     df = pd.read_csv(allele_table, sep='\t', 
                      header=0, index_col=None, 
                      na_values=".")
@@ -985,6 +1011,10 @@ def add_chrom_to_tandem_df(tandem_df, gff_df,
     
     return tandem_df
 
+def create_empty_series_for_allele_table(gene_headers):
+    indexes = gene_headers + ['dup_gene']
+    ds = pd.Series(index=indexes)
+    return ds
 
 def create_empty_series_for_final_table(gene_headers):
     indexes = ['chrom'] + gene_headers + ["|Paralogs", "Tandem"]
@@ -1032,7 +1062,7 @@ def formatAlleleTableToFinal(row, gene_headers,
     allele_genes = main_genes[allele_gene_headers]
 
     res[allele_gene_headers] = allele_genes
-    dup_genes = list(paralog_genes)
+    dup_genes = set(paralog_genes)
     for query_gene in sorted(main_genes):
         gene_header = "gene{}".format(which_hap(query_gene))
         if gene_header == 'geneNone':
@@ -1042,9 +1072,9 @@ def formatAlleleTableToFinal(row, gene_headers,
         elif res[gene_header] == query_gene:
             continue
         else:
-            dup_genes.append(query_gene)
+            dup_genes.add(query_gene)
     
-    dup_tandem_genes =[]
+    dup_tandem_genes = set()
     if tandem_genes:
         for query_gene in sorted(tandem_genes):
             gene_header = "gene{}".format(which_hap(query_gene))
@@ -1055,13 +1085,13 @@ def formatAlleleTableToFinal(row, gene_headers,
             elif res[gene_header] == query_gene:
                 continue
             else:
-                dup_tandem_genes.append(query_gene)
+                dup_tandem_genes.add(query_gene)
             
             if query_gene in dup_genes:
-                dup_genes.remove(query_gene)
+                dup_genes.discard(query_gene)
     
-    res['|Paralogs'] = ",".join(dup_genes)
-    res['Tandem'] = ','.join(dup_tandem_genes)
+    res['|Paralogs'] = ",".join(sorted(dup_genes)) if dup_genes else np.nan
+    res['Tandem'] = ','.join(sorted(dup_tandem_genes)) if dup_tandem_genes else np.nan
     return res
 
 def finalTable2AllFrame(final_table):
@@ -1079,49 +1109,110 @@ def finalTable2AllFrame(final_table):
     add_dup_df2 = add_dup_df2.dropna(how='all', axis=1)
     return add_dup_df2
 
+
+def AllFrame2finalTable(final_df):
+    """
+    convert all final allele table dataframe to a dataframe 
+    """
+    gene_headers = final_df.columns[
+        final_df.columns.str.find('gene').map(lambda x: x == 0)].to_list()
+    tandem_gene_columns = final_df.columns[
+        final_df.columns.str.find('tandem').map(lambda x: x == 0)]
+    paralogs_gene_columns = final_df.columns[
+        final_df.columns.str.find('paralogs').map(lambda x: x == 0)]
+    def funcParalogs(x):
+        res = x[paralogs_gene_columns].dropna()
+        if not res.empty:
+            return ",".join(res)
+        else:
+            return np.nan
+    
+    def funcTandem(x):
+        res = x[tandem_gene_columns].dropna()
+        if not res.empty:
+            return ",".join(res)
+        else:
+            return np.nan
+    add_dup_df2 = final_df.copy()
+    add_dup_df2.drop(paralogs_gene_columns, axis=1, inplace=True)
+    add_dup_df2.drop(tandem_gene_columns, axis=1, inplace=True)
+    add_dup_df2['|Paralogs'] = final_df.apply(funcParalogs, 1).dropna()
+    add_dup_df2['Tandem'] = final_df.apply(funcTandem, 1).dropna()
+    add_dup_df2 = add_dup_df2.replace(r'^\s*$', np.NaN, regex=True)
+    columns = ['chrom'] + gene_headers + ['|Paralogs', 'Tandem']
+    add_dup_df2 = add_dup_df2[columns]
+    return add_dup_df2
+
 def create_empty_stat_table(gene_headers):
     columns = ['total']
     columns += ['gene{}'.format(i) 
                for i in range(1, len(gene_headers) + 1)]
     columns += ['paralogs', 'tandem']
-    ds = pd.Series(index=columns, 
-                   dtype=np.int32)
+    ds = pd.Series(index=columns)
     return ds
     
-def statFinalTableForTetra(chrom, df,
-            gene_headers=['geneA', 'geneB', 'geneC', 'geneD']):
-    four_allele_df = df[gene_headers].dropna(thresh=4)
-    three_allele_df = df[gene_headers].dropna(thresh=3)
-    two_allele_df = df[gene_headers].dropna(thresh=2)
-    one_allele_df = df[gene_headers].dropna(thresh=1)
-    four_allele_num = len(four_allele_df) * 4
-    three_allele_num = len(three_allele_df) * 3
-    two_allele_num = len(two_allele_df) * 2
-    one_allele_num = len(one_allele_df) * 1
+def statFinalTable_singleChrom(chrom, df):
+    gene_headers = df.columns.to_list()
+    gene_headers.remove('|Paralogs')
+    gene_headers.remove('Tandem')
+    gene_headers.remove('chrom')
+    hap_length = len(gene_headers)
+    allele_df = df[gene_headers]
+    ds = create_empty_stat_table(gene_headers)
+    total = 0
+    for i in range(hap_length):
+        tmp_allele_df = allele_df[allele_df.count(axis=1) == i+1]
+        ds['gene{}'.format(i+1)] = len(tmp_allele_df)
+        total += ds['gene{}'.format(i+1)]
+   
     
     tandem_num = df['Tandem'].str.split(',').apply(lambda x: len(x) 
-                            if not isinstance(x, float) else 0, 1).sum()
+                            if not isinstance(x, float) and len(x) > 0 else 0, 1).sum()
     paralog_num = df['|Paralogs'].str.split(',').apply(lambda x: len(x) 
-                            if not isinstance(x, float) else 0, 1).sum()
-    ds = create_empty_stat_table(gene_headers)
-    ds.gene4 = four_allele_num
-    ds.gene3 = three_allele_num
-    ds.gene2 = two_allele_num
-    ds.gene1 = one_allele_num
-    ds.total = four_allele_num + three_allele_num \
-                    + two_allele_num + one_allele_num \
-                + paralog_num + tandem_num
+                            if not isinstance(x, float) and len(x) > 0 else 0, 1).sum()
+    
+    #total = total + paralog_num + tandem_num
+    ds.total = total
     ds.paralogs = paralog_num
     ds.tandem = tandem_num
     ds.name = chrom
     return ds
 
+def statFinalTable(res, threads=4):
+    gene_headers = res.columns.to_list()
+    gene_headers.remove('|Paralogs')
+    gene_headers.remove('Tandem')
+    gene_headers.remove('chrom')
+    gene_headers = ['gene{}'.format(i+1) for i in range(len(gene_headers))]
+   
+    stat = applyParallel(res.groupby('chrom'), statFinalTable_singleChrom, threads=threads, axis=1).T
+    stat.loc['Gene with annotated alleles'] = stat[gene_headers].sum()
+    stat.loc['Gene with annotated alleles']['total'] = stat.loc['Gene with annotated alleles'][gene_headers].sum()
+    stat.loc['Duplicated genes'] = stat[['paralogs', 'tandem']].sum()
 
-def applyParallel(dfGrouped, func, axis=1, threads=4):
+    stat.loc['Duplicated genes']['total'] = stat.loc['Duplicated genes'].sum()
+   
+    columns = ['Total no. of genes']
+    columns += ["No. of genes with {} alleles".format(i) 
+                       for i in range(1, len(gene_headers) + 1)]
+    columns += ['No. of dispersely duplicated genes', 
+                   'No. of tandem duplicated genes']
+    stat.columns = columns
+    stat = stat.astype(pd.Int64Dtype())
+    return stat
+
+
+
+
+def applyParallel(dfGrouped, func, axis=1, threads=4, args=()):
     """
     parallel apply a func for pandas groupby 
     ![https://stackoverflow.com/questions/26187759/parallelize-apply-after-pandas-groupby]
     """
-    results = Parallel(n_jobs=threads)(delayed(func)(name, group) 
+    if args:
+        results = Parallel(n_jobs=threads)(delayed(func)(name, group, *args) 
+                                       for name, group in dfGrouped)
+    else:
+        results = Parallel(n_jobs=threads)(delayed(func)(name, group) 
                                        for name, group in dfGrouped)
     return pd.concat(results, axis=axis)

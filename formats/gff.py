@@ -101,7 +101,7 @@ def renameAttributes(args):
 
         Change the attributes within the gff3
     """
-    p = p=argparse.ArgumentParser(prog=renameAttributes.__name__,
+    p = argparse.ArgumentParser(prog=renameAttributes.__name__,
                         description=renameAttributes.__doc__,
                         formatter_class=argparse.RawTextHelpFormatter,
                         conflict_handler='resolve')

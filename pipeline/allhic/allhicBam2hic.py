@@ -21,7 +21,7 @@ def allhicBam2hic(args):
     %(prog)s <sorted.bam> <groups.asm.fasta> <groups.agp> [Options]
         convert allhic bam file to juicer `.hic` file
     """
-    p = p=argparse.ArgumentParser(prog=allhicBam2hic.__name__,
+    p = argparse.ArgumentParser(prog=allhicBam2hic.__name__,
                         description=allhicBam2hic.__doc__,
                         formatter_class=argparse.RawTextHelpFormatter,
                         conflict_handler='resolve')

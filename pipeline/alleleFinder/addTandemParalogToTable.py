@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 # -*- coding:utf-8 -*-
 
+
 from __future__ import print_function
 
 import argparse
@@ -14,66 +15,95 @@ import multiprocessing as mp
 from pandarallel import pandarallel
 
 from collections import OrderedDict, Counter
-from TDGP.pipeline.alleleFinder.utils import *
+from utils import *
 
 
-def create_empty_stat_table(gene_headers):
-    columns = ['total']
-    columns += ['gene{}'.format(i) 
-               for i in range(1, len(gene_headers) + 1)]
-    columns += ['paralogs', 'tandem']
-    ds = pd.Series(index=columns)
-    return ds
+def formatRemainTandemGene_single(row, gene_headers):
+    empty_row = create_empty_series_for_final_table(gene_headers)
+    chrom = row.chr
+    gene1, gene2, hap = row.gene1, row.gene2, row.hap
+    if hap == 'geneNone':
+        return empty_row
+    empty_row['chrom'] = chrom
+    empty_row[hap] = gene1
+    empty_row['Tandem'] = gene2
+    return empty_row
+
+def formatRemainTandemGene(tandem_df, genelist, threads=4,
+                           gene_headers=['geneA', 'geneB', 'geneC', 'geneD']):
+    tandem_remain_df = tandem_df[~tandem_df.isin(genelist).any(1)]
+    tandem_remain_df['hap'] = tandem_remain_df['gene1'].apply(lambda x: "gene{}".format(which_hap(x)))
+    pandarallel.initialize(nb_workers=threads, verbose=0)
+    df = tandem_remain_df.parallel_apply(formatRemainTandemGene_single, axis=1, args=(gene_headers, ))
+    df.dropna(how='all', axis=0, inplace=True)
+    df.reset_index(drop=True, inplace=True)
+    return df
+
+def addRemainTandemGene(tandem_df, final_df, threads=4):
+    gene_headers = get_headers_from_final_table(final_df)
+    final_all_df = finalTable2AllFrame(final_df)
+    geneList = alleleTable2GeneList(final_all_df)
+    tandem_remain_allele_df = formatRemainTandemGene(tandem_df, 
+                                geneList, threads, gene_headers)
     
-def statFinalTableForTetra_singleChrom(chrom, df):
-    gene_headers = df.columns.to_list()
-    gene_headers.remove('|Paralogs')
-    gene_headers.remove('Tandem')
-    gene_headers.remove('chrom')
-    hap_length = len(gene_headers)
-    allele_df = df[gene_headers]
-    ds = create_empty_stat_table(gene_headers)
-    total = 0
-    for i in range(hap_length):
-        tmp_allele_df = allele_df[allele_df.count(axis=1) == i+1]
-        ds['gene{}'.format(i+1)] = len(tmp_allele_df)
-        total += ds['gene{}'.format(i+1)]
-   
-    
-    tandem_num = df['Tandem'].str.split(',').apply(lambda x: len(x) 
-                            if not isinstance(x, float) and len(x) > 0 else 0, 1).sum()
-    paralog_num = df['|Paralogs'].str.split(',').apply(lambda x: len(x) 
-                            if not isinstance(x, float) and len(x) > 0 else 0, 1).sum()
-    
-    #total = total + paralog_num + tandem_num
-    ds.total = total
-    ds.paralogs = paralog_num
-    ds.tandem = tandem_num
-    ds.name = chrom
-    return ds
 
-def statFinalTableForTetra(res, threads=4):
-    gene_headers = res.columns.to_list()
-    gene_headers.remove('|Paralogs')
-    gene_headers.remove('Tandem')
-    gene_headers.remove('chrom')
-    gene_headers = ['gene{}'.format(i+1) for i in range(len(gene_headers))]
-   
-    stat = applyParallel(res.groupby('chrom'), statFinalTableForTetra_singleChrom, threads=threads, axis=1).T
-    stat.loc['Gene with annotated alleles'] = stat[gene_headers].sum()
-    stat.loc['Gene with annotated alleles']['total'] = stat.loc['Gene with annotated alleles'][gene_headers].sum()
-    stat.loc['Duplicated genes'] = stat[['paralogs', 'tandem']].sum()
+    df = pd.concat([final_df, tandem_remain_allele_df], ignore_index=True)
+    df.reset_index(drop=True, inplace=True)
+    return df
 
-    stat.loc['Duplicated genes']['total'] = stat.loc['Duplicated genes'].sum()
-   
-    columns = ['Total no. of genes']
-    columns += ["No. of genes with {} alleles".format(i) 
-                       for i in range(1, len(gene_headers) + 1)]
-    columns += ['No. of dispersely duplicated genes', 
-                   'No. of tandem duplicated genes']
-    stat.columns = columns
-    stat = stat.astype(pd.Int64Dtype())
-    return stat
+def remove_dup_from_final_table(final_all_df, iter_max=3, max_dups=10, 
+                        gene_headers=['geneA', 'geneB', 'geneC', 'geneD']):
+    res_df = final_all_df.copy()
+    dup_gene_columns = final_all_df.columns[
+        alleleTable_df.columns.str.find('paralogs').map(lambda x: x == 0)]
+    tandem_gene_columns = final_all_df.columns[
+        alleleTable_df.columns.str.find('tandem').map(lambda x: x == 0)]
+    dup_genes = get_dup_genes(final_all_df[gene_headers + tandem_gene_columns])
+
+    iter_num = 1
+    while (len(dup_genes) > max_dups) and (iter_num < iter_max):
+        add_dup_df2 = res_df.copy()
+        rm_idx = []
+        for gene in dup_genes:
+            tmp_df = add_dup_df2.loc[add_dup_df2.isin([gene]).any(1)]
+            if tmp_df.empty:
+                continue
+
+            idx_series = tmp_df.apply(lambda x: len(x[gene_headers].dropna()), 1).sort_values(ascending=False)
+            idx_series = idx_series.index.to_list()
+            
+            idxmax = idx_series[0]
+            idxmin = idx_series[1:] if len(idx_series) > 1 else [idx_series[0]]
+
+            allele_genes = tmp_df.loc[idxmax, gene_headers].to_list()
+            old_dup_genes_series = tmp_df.loc[idxmax].drop(gene_headers).dropna().to_list()
+
+            if isinstance(old_dup_genes_series, float):
+                old_dup_genes = []
+            else:
+                old_dup_genes = old_dup_genes_series
+
+            new_dup_genes = []
+            for l in tmp_df.loc[idxmin].values.tolist():
+                new_dup_genes += list(filter(lambda x: not isinstance(x, float), l))
+                
+            new_dup_genes = set(new_dup_genes)  - set(allele_genes) | set(old_dup_genes)
+            new_dup_genes = new_dup_genes - set(allele_genes)
+            if len(idx_series) > 1:
+                rm_idx.extend(idxmin)
+                add_dup_df2.drop(idxmin, 0, inplace=True)
+        
+        new_dup_genes = get_dup_genes(res_df)
+        remove_genes_number = len(dup_genes) - len(new_dup_genes)
+        dup_genes = new_dup_genes
+        res_df.drop(rm_idx, axis=0, inplace=True)
+        
+        logging.debug("remove {} duplicated genes in iter {}".format(
+                                remove_genes_number, iter_num))
+        iter_num += 1
+        
+    return res_df
+
 
 
 def addTandemParalogToTable(args):
@@ -81,7 +111,7 @@ def addTandemParalogToTable(args):
     %(prog)s <allele.table> <tandem> <gff> [Options]
 
     """
-    p = p=argparse.ArgumentParser(prog=addTandemParalogToTable.__name__,
+    p = argparse.ArgumentParser(prog=addTandemParalogToTable.__name__,
                         description=addTandemParalogToTable.__doc__,
                         formatter_class=argparse.RawTextHelpFormatter,
                         conflict_handler='resolve')
@@ -107,24 +137,30 @@ def addTandemParalogToTable(args):
     gene_headers.remove('dup_gene')
     gff_df = import_gff(args.gff, rmtig=True)
     tandem_df = import_tandem(args.tandem)
-
     gff_df.set_index('gene', inplace=True)
+    tandem_with_chrom_df = add_chrom_to_tandem_df(tandem_df, gff_df, 
+                            threads=args.threads)
 
     allele_table_all = alleleTable2AllFrame(allele_table)
     allele_table_all.dropna(how='all', axis=0, inplace=True)
+    
     pandarallel.initialize(nb_workers=args.threads, verbose=0)
     res = allele_table_all.parallel_apply(formatAlleleTableToFinal, axis=1, 
                 args=(gene_headers, tandem_df, gff_df))
 
+    res = addRemainTandemGene(tandem_with_chrom_df, res, threads=args.threads)
+    
 
     res.sort_values(by=['chrom'], inplace=True)
     res_only_genes = res.drop(['chrom'], axis=1)
-    res_genes = alleleTable2GeneList(res_only_genes)
+    res_genes = alleleTable2GeneList(finalTable2AllFrame(res_only_genes))
+    
+    
     with open("final.allele.table.gene.list", 'w') as out:
         out.write("\n".join(res_genes))
     res.to_csv(args.output, sep='\t', header=True, index=None, na_rep='.')
     if args.stat:
-        stat = statFinalTableForTetra(res, args.threads)
+        stat = statFinalTable(res, args.threads)
         stat.to_csv(args.stat, sep='\t', header=True, index=True, na_rep='-')
         stat.to_excel(args.stat + ".xls", header=True, index=True, 
                         na_rep="-")

@@ -12,6 +12,10 @@ export CLUSTER=PBS
 ### Requirements
 - python >= 3.6
 - pandas >= 1.1.*
+- snakemake
+- pandarallel
+- joblib
+- ncbi-blast
 - MCscanX
 - seqkit
 - bedtools

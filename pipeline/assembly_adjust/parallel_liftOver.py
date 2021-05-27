@@ -18,7 +18,7 @@ def parallel_liftOver(args):
     """
     %(prog)s 
     """
-    p = p=argparse.ArgumentParser(prog=parallel_liftOver.__name__,
+    p = argparse.ArgumentParser(prog=parallel_liftOver.__name__,
                         description=parallel_liftOver.__doc__,
                         formatter_class=argparse.RawTextHelpFormatter,
                         conflict_handler='resolve')

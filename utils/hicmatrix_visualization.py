@@ -19,7 +19,7 @@ from TDGP.apps.grid import CMD
 
 
 def main(args):
-    p = p=argparse.ArgumentParser(prog=main.__name__,
+    p = argparse.ArgumentParser(prog=main.__name__,
                         description=main.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')

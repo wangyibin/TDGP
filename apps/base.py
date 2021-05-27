@@ -86,6 +86,10 @@ def debug(level=logging.DEBUG):
     formats += yellow(" %(message)s")
     logging.basicConfig(level=level, format=formats, datefmt="[%Y-%m-%d %H:%M:%S]")
 
+    ## slient some module logger to ERROR 
+    logging.getLogger('numpy').setLevel(logging.ERROR)
+    logging.getLogger('numexpr').setLevel(logging.ERROR)
+    logging.getLogger('matplotlib').setLevel(logging.ERROR)
 
 debug()
 

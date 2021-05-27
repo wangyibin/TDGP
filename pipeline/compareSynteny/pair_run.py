@@ -23,9 +23,9 @@ def pairs(samples):
 
 def run_pairs(pairs):
     sample1, sample2 = pairs.split("-")
-    sample1_h = sample1.replace('H', '')
-    sample2_h = sample2.replace('H', '')
-
+    # sample1_h = sample1.replace('H', '')
+    # sample2_h = sample2.replace('H', '')
+    sample1_h, sample2_h = sample1, sample2
     os.mkdir(pairs)
     os.chdir(pairs)
     header = Cluster().header
@@ -47,7 +47,7 @@ def run_pairs(pairs):
     
 
 def main(args):
-    p = p=argparse.ArgumentParser(prog=__file__,
+    p = argparse.ArgumentParser(prog=__file__,
                         description=__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')

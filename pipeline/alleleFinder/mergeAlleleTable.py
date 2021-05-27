@@ -85,8 +85,8 @@ def mergeAlleleTable(args):
     pOpt = p.add_argument_group('Optional arguments')
     pReq.add_argument('alleletable1', help='allele table from synteny')
     pReq.add_argument('alleletable2', help='allele table from gmap')
-    pReq.add_argument('blast',
-                      help='blast file after filter')
+   # pReq.add_argument('blast',
+   #                   help='blast file after filter')
     pOpt.add_argument('--gene_headers', nargs="+",
                       default=['geneA', 'geneB', 'geneC', 'geneD'],
                       help='gene headers of table [default: %(default)s]')
@@ -102,7 +102,7 @@ def mergeAlleleTable(args):
 
     synteny_allele_table = import_allele_table(args.alleletable1)
     gmap_allele_table = import_allele_table(args.alleletable2)
-    blast_df = import_blast(args.blast, onlyid=True)
+    #blast_df = import_blast(args.blast, onlyid=True)
 
     merge_df = pd.concat(
         [synteny_allele_table, gmap_allele_table], axis=0, ignore_index=True,)

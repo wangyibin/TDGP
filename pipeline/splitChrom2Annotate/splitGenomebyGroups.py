@@ -71,7 +71,7 @@ def splitGenomebyGroups(args):
     %(prog)s <genome.fasta> <groups.db> [Options]
         split genome by groups
     """
-    p = p=argparse.ArgumentParser(prog=splitGenomebyGroups.__name__,
+    p = argparse.ArgumentParser(prog=splitGenomebyGroups.__name__,
                         description=splitGenomebyGroups.__doc__,
                         formatter_class=argparse.RawTextHelpFormatter,
                         conflict_handler='resolve')

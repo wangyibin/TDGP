@@ -31,7 +31,7 @@ def generate_allele_table(args):
         Examples:
             %(prog)s --path ./ --chrom_list Chr01g1 Chr01g2 Chr01g3 Chr01g4 > synteny.tsv
     """
-    p = p=argparse.ArgumentParser(prog=generate_allele_table.__name__,
+    p = argparse.ArgumentParser(prog=generate_allele_table.__name__,
                         description=generate_allele_table.__doc__,
                         formatter_class=argparse.RawTextHelpFormatter,
                         conflict_handler='resolve')

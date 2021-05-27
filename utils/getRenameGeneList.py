@@ -67,7 +67,7 @@ def getRenameGeneList(args):
         --------------------------------------
         %(prog)s.py in.gff > renamed.list
     """
-    p = p=argparse.ArgumentParser(prog=getRenameGeneList.__name__,
+    p = argparse.ArgumentParser(prog=getRenameGeneList.__name__,
                         description=getRenameGeneList.__doc__,
                         formatter_class=argparse.RawTextHelpFormatter,
                         conflict_handler='resolve')

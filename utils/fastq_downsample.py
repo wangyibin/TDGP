@@ -14,7 +14,7 @@ def downsample(args):
     %(prog)s R1 R2 [Options]
         random select fastq to downsample
     """
-    p = p=argparse.ArgumentParser(prog=downsample.__name__,
+    p = argparse.ArgumentParser(prog=downsample.__name__,
                         description=downsample.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')

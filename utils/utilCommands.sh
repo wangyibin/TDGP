@@ -123,3 +123,19 @@ sra_fastp_PE() {
         ## qsub submit all PE sra fastq file to use fastp control quality
         for sra in  *.fastq.gz; do s=${sra%%.fastq.gz};echo "fastp -i ${s}.fastq.gz -o ${s}_fp_.fastq.gz -j ${s}.json -h ${s}.html"> run_${s}_fastp.sh;qsub -pe mpi 4 run_${s}_fastp.sh; done
 }
+
+
+add() {
+        awk '{s+=$1} END {print s}'
+}
+
+pwc() {
+        if [[ -z $@ ]];then
+                echo
+                echo -e "Usage: cat sample.txt | $0 -l  "
+                echo -e "\tparallel wc"
+                echo
+                return;
+        fi
+        parallel --block=10M --pipe wc $@ 2>/dev/null | awk '{s+=$1} END {print s}'
+}

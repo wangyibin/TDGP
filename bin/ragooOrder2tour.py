@@ -38,7 +38,7 @@ def ragooOrder2tour(args):
 
         convert ragoo order file to tour file.
     """
-    p = p=argparse.ArgumentParser(prog=ragooOrder2tour.__name__,
+    p = argparse.ArgumentParser(prog=ragooOrder2tour.__name__,
                         description=ragooOrder2tour.__doc__,
                         formatter_class=argparse.RawTextHelpFormatter,
                         conflict_handler='resolve')

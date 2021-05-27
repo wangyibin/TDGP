@@ -46,6 +46,8 @@ def main():
             ('plotCisTrans', 'plot the barplot of cis and trans interactions'),
             ("plotDistDensity", "Plot the IDE"),
             ("plotIDEMulti", 'plot multi sample IDE'),
+            ('plotFragmentSizeHist', 'plot histogram of fragment size'),
+            ('getRealityBed', 'get reality fragments bed file'),
             ('statFrag', 'stat the reality fragments')
         )
     p = ActionDispatcher(actions)
@@ -484,7 +486,7 @@ def validStat(args):
 
         Stat the hicpro valid pais dat to a table
     """
-    p=argparse.ArgumentParser(prog=validStat.__name__,
+    p = argparse.ArgumentParser(prog=validStat.__name__,
                         description=validStat.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -569,10 +571,10 @@ def validStat(args):
             db['Dumped Rate (%)'] = "{:.2f}".format(1.0 * mRS.loc['Dumped_pairs']['count'] /
                                                         mpair.loc['Unique_paired_alignments']['count'] * 100)
             
-            db['Interaction Paried-end Reads'] = '{:,}'.format(merge.loc['valid_interaction']['count'])
+            db['Interaction Paired-end Reads'] = '{:,}'.format(merge.loc['valid_interaction']['count'])
             db['Interaction Rate (%)'] = '{:.2f}'.format(1.0 * merge.loc['valid_interaction']['count'] /
                                                         mpair.loc['Unique_paired_alignments']['count'] * 100)
-            db['Lib Valid Paired-end Reads'] = '{:,}'.format(merge.loc['valid_interaction']['count'])
+            db['Lib Valid Paired-end Reads'] = '{:,}'.format(merge.loc['valid_interaction_rmdup']['count'])
             db['Lib Valid Rate (%)']= '{:.2f}'.format(1.0 * merge.loc['valid_interaction_rmdup']['count'] /
                                                         merge.loc['valid_interaction']['count'] * 100)
             db['Lib Dup Rate (%)'] = '{:.2f}'.format(100- (1.0 * merge.loc['valid_interaction_rmdup']['count'] /
@@ -658,7 +660,7 @@ def plotIDEMulti(args):
     %(prog)s 1.ValidPairs 2.ValidPairs ... [Options]
         To multi sample IDE in a picture.
     """
-    p = p=argparse.ArgumentParser(prog=plotIDEMulti.__name__,
+    p = argparse.ArgumentParser(prog=plotIDEMulti.__name__,
                         description=plotIDEMulti.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -760,7 +762,7 @@ def plotIDEMultiv1(args):
     %(prog) 1.ValidPairs 2.ValidPairs ... [Options]
         To multi sample IDE in a picture.
     """
-    p = p=argparse.ArgumentParser(prog=plotIDEMulti.__name__,
+    p = argparse.ArgumentParser(prog=plotIDEMulti.__name__,
                         description=plotIDEMulti.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -841,7 +843,7 @@ def plotCisTrans(args):
         calculate the cis and trans interaction, and plot the barplot.
     
     """
-    p = p=argparse.ArgumentParser(prog=plotCisTrans.__name__,
+    p = argparse.ArgumentParser(prog=plotCisTrans.__name__,
                         description=plotCisTrans.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
@@ -946,14 +948,16 @@ def statFrag(args):
         stat the Ratio of theoretically digested genomic 
         fragments covered by valid paired Hi-C reads.
     """
-    p = p=argparse.ArgumentParser(prog=statFrag.__name__,
+    p = argparse.ArgumentParser(prog=statFrag.__name__,
                         description=statFrag.__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')
     pOpt = p.add_argument_group('Optional arguments')
     pReq.add_argument('validpairs',  help='Validparis file')
     pReq.add_argument('enzyme', help='restriction enzyme site bed file')
-    pOpt.add_argument('-o', '--out', type=argparse.FileType('w'), default=sys.stdout,
+    pOpt.add_argument('--unmap', default=False, action='store_true',
+            help='output the unmap fragments bed [default: %(default)s]')
+    pOpt.add_argument('-o', '--output', type=argparse.FileType('w'), default=sys.stdout,
             help='output file [default: stdout]')
     pOpt.add_argument('-h', '--help', action='help',
             help='show help message and exit.')
@@ -964,19 +968,122 @@ def statFrag(args):
     reality_num = 0
     check_file_exists(args.enzyme)
 
-    with open(args.enzyme, 'r') as fp:
-        for line in fp:
-            if line.strip():
-                theo_num += 1
+    enzyme_df = pd.read_csv(args.enzyme, sep='\t', 
+                    header=None, index_col='name',
+                    names=['chrom', 'start', 'end',
+                            'name', 'flag', 'strand'])
+    theoFrags = set(enzyme_df.index)
+    theo_num = len(theoFrags)
     vp = ValidPairs(args.validpairs)
     realFrags = vp.getRealFrags()
     reality_num = len(realFrags)
     
-    print("Theoretical Fragments\t{}".format(theo_num), file=args.out)
-    print("Reality Fragments\t{}".format(reality_num), file=args.out)
-    print("Reality Fragments Ratio (%)\t{:.2%}".format(reality_num*1.0/theo_num), 
-            file=args.out)
+    if args.unmap:
+        unmapFrags = theoFrags - realFrags 
+        unmap_df = enzyme_df.loc[unmapFrags]
+        unmap_df.reset_index(inplace=True)
+        df = unmap_df[['chrom', 'start', 'end',
+                            'name', 'flag', 'strand']]
+        df = df.sort_values(by=['chrom', 'start'])
+        df.to_csv(args.output.name + ".unmap", sep='\t', header=None, index=None)
 
+    print("Theoretical Fragments\t{}".format(theo_num), file=args.output)
+    print("Reality Fragments\t{}".format(reality_num), file=args.output)
+    print("Reality Fragments Ratio (%)\t{:.2%}".format(reality_num*1.0/theo_num), 
+            file=args.output)
+
+def getRealityBed(args):
+    """
+    %(prog)s <allValidParis> <theoretical.bed> [Options] > <reality.bed> 
+        get reality fragment bed file from valid pairs file and 
+            theoretical bed.
+    """
+    p = argparse.ArgumentParser(prog=getRealityBed.__name__,
+                        description=getRealityBed.__doc__,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('validpairs',  help='Validparis file')
+    pReq.add_argument('enzyme', help='restriction enzyme site bed file')
+    pOpt.add_argument('-o', '--output', type=argparse.FileType('w'), default=sys.stdout,
+            help='output file [default: stdout]')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    
+    args = p.parse_args(args)
+
+    check_file_exists(args.enzyme)
+
+    enzyme_df = pd.read_csv(args.enzyme, sep='\t', 
+                    header=None, index_col='name',
+                    names=['chrom', 'start', 'end',
+                            'name', 'flag', 'strand'])
+
+    vp = ValidPairs(args.validpairs)
+    realFrags = vp.getRealFrags()
+    df = enzyme_df.loc[realFrags]
+    df.reset_index(inplace=True, )
+    
+    df = df[['chrom', 'start', 'end',
+                            'name', 'flag', 'strand']]
+    df = df.sort_values(by=['chrom', 'start'])
+    df.to_csv(args.output, sep='\t', header=None, index=None)
+
+
+def plotFragmentSizeHist(args):
+    """
+    %(prog)s <fragment1 ...> [Options]
+        plot histogram of hic validpairs fragment size
+    """
+
+    p = argparse.ArgumentParser(prog=plotFragmentSizeHist.__name__,
+                        description=plotFragmentSizeHist.__doc__,
+                        formatter_class=argparse.RawTextHelpFormatter,
+                        conflict_handler='resolve')
+    pReq = p.add_argument_group('Required arguments')
+    pOpt = p.add_argument_group('Optional arguments')
+    pReq.add_argument('fragsize',  nargs="+",
+            help='fragment size')
+    pOpt.add_argument('--xMax', default=1500, type=int,
+            help='max value of x-axis [default: %(default)s]')
+    pOpt.add_argument('--bin', default=25, type=int,
+            help='bin size of histogram [default: %(default)s]')
+    pOpt.add_argument('-o', '--output', default='plotFragmentSizeHist.png',
+            help='output of picture')
+    pOpt.add_argument('-h', '--help', action='help',
+            help='show help message and exit.')
+    
+    args = p.parse_args(args)
+
+    def import_fragment_size(sizefile, sample):
+        df = pd.read_csv(sizefile, header=None, index_col=None,
+                        sep='\t', names=['size'], dtype='int32')
+        df['size'] = df['size'].astype('int32')
+        df['sample'] = sample
+        df['sample'] = df['sample'].astype('category')
+
+        return df
+
+    samples = list(map(lambda x: x.rsplit(".")[0], args.fragsize))
+    df_list = []
+    for fragsize, sample in list(zip(args.fragsize, samples)):
+        tmp_df = import_fragment_size(fragsize, sample)
+        df_list.append(tmp_df)
+    df = pd.concat(df_list, axis=0)
+
+    ## plot
+    sns.displot(df, x='size', hue='sample', stat='probability',#stat='density', 
+            bins=range(0, args.xMax, args.bin), common_norm=False)
+    ax = plt.gca()
+    ax.set_xlabel('fragment size (bp)', fontsize=14)
+    ax.set_ylabel('probability', fontsize=14)
+
+    sns.despine(trim=True)
+
+    plt.savefig(args.output, dpi=300)
+    
+
+    
 
 if __name__ == "__main__":
     main()

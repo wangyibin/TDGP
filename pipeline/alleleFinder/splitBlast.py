@@ -17,7 +17,7 @@ def splitBlast(args):
     """
     %(prog)s 
     """
-    p = p=argparse.ArgumentParser(prog=splitBlast.__name__,
+    p = argparse.ArgumentParser(prog=splitBlast.__name__,
                         description=splitBlast.__doc__,
                         formatter_class=argparse.RawTextHelpFormatter,
                         conflict_handler='resolve')

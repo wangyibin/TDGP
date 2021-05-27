@@ -135,7 +135,7 @@ def plot_heatmap(whole_obs_exp_matrix, chrom_list, prefix,
 
 
 if __name__ == "__main__":
-    p=argparse.ArgumentParser(prog=op.basename(__file__),
+    p = argparse.ArgumentParser(prog=op.basename(__file__),
                         description=__doc__,
                         conflict_handler='resolve')
     pReq = p.add_argument_group('Required arguments')

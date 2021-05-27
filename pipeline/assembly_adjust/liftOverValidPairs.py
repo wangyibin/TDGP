@@ -200,7 +200,7 @@ def liftOverValidPairs(args):
         liftover validparis file to a new coordinate file. 
 
     """
-    p = p=argparse.ArgumentParser(prog=liftOverValidPairs.__name__,
+    p = argparse.ArgumentParser(prog=liftOverValidPairs.__name__,
                         description=liftOverValidPairs.__doc__,
                         formatter_class=argparse.RawTextHelpFormatter,
                         conflict_handler='resolve')

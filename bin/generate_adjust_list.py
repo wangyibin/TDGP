@@ -20,7 +20,7 @@ def generate_adjust_list(args):
 
         generate an adjust list for each chromosome
     """
-    p = p=argparse.ArgumentParser(prog=generate_adjust_list.__name__,
+    p = argparse.ArgumentParser(prog=generate_adjust_list.__name__,
                         description=generate_adjust_list.__doc__,
                         formatter_class=argparse.RawTextHelpFormatter,
                         conflict_handler='resolve')
