@@ -1,16 +1,18 @@
 # split genome to annotate by homologous
-pipeline for genome annotation, to split large genome to some parts.
+pipeline for genome annotation, to split large genome to some parts.(version 1.1)
 ## Dependency
 - [`seqkit`](https://github.com/shenwei356/seqkit)
 - [`python >= 3.5`](https://python.org)
 - [`hisat2`](https://github.com/DaehwanKimLab/hisat2)
 - [`samtools`](https://github.com/samtools/samtools)
 - [`ncbi-blast-2.3`](ftp://ftp.ncbi.nlm.nih.gov/blast/executables/blast+/2.3.0/)
+- [`ParaFly`](http://parafly.sourceforge.net/)
 - [`parallel`](https://www.gnu.org/software/parallel/)
 - [`pigz`](http://zlib.net/pigz/)
 - [`snakemake`](https://snakemake.readthedocs.io/en/stable/getting_started/installation.html)
 - [`biopython`](https://biopython.org/)
 - [`pandas`](https://pandas.pydata.org/)
+- [`pytools`](https://documen.tician.de/pytools/)
 ### split genome
 split genome by groups
 - requires

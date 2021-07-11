@@ -8,6 +8,7 @@ import sys
 
 from Bio import SeqIO
 from collections import OrderedDict
+from pytools.persistent_dict import PersistentDict
 
 groups_db_file = config['groups']
 groups_db = OrderedDict()
@@ -35,20 +36,22 @@ rule all:
     input:
         expand("{group}/{group}.homo.fasta", group=groups_list)
 
+
+homo_protein_list = [ i.strip() for i in \
+    os.popen(f"seqkit seq -i -n {homo_proteins}") ]
+homo_protein_list = list(set(homo_protein_list))
+homo_protein_path_list = list(map(lambda x:f"{homo_proteins}.split/{prefix}.id_{x}{suffix}", homo_protein_list))
 rule splitHomoProtein:
     input:
-        homo = homo_proteins,
+        homo = homo_proteins   
 
     output:
-        expand("{fasta}.split/{prefix}.part_{number}{suffix}", 
-                fasta=(homo_proteins, ), number=numbers, 
-                prefix=(prefix, ), suffix=(suffix, )) 
+        f'{homo_proteins}.split.ok'
     log:
         "logs/splitHomoProtein.log"
-    params:
-        num = homo_part_number
+    threads: ncpus
     shell:
-        "seqkit split -p {params.num} {input.homo} 2>{log}"
+        "seqkit split -j {threads} -i {input.homo} 2>{log} && touch {output}"
 
 rule makeblastdb:
     input:
@@ -62,35 +65,69 @@ rule makeblastdb:
     shell:
         "makeblastdb -in {input} -out {input}.db -dbtype {params.dbtype} 2>{log}"
 
-rule tblastn:
+rule write_tblastn_cmd:
     input:
+        f'{homo_proteins}.split.ok',
         target_fasta = "{group}/{group}.fasta",
-        db =  expand("{{group}}/{{group}}.fasta.db.{ext}", ext=['nsq', 'nin', 'nhr']),
-        fasta = f"{homo_proteins}.split/{prefix}.part_{{number}}{suffix}"
-                
+        db =  expand("{{group}}/{{group,}}.fasta.db.{ext}", ext=['nsq', 'nin', 'nhr']),
+        
     output:
-        f"{{group}}/results/{prefix}.part_{{number}}{suffix}.tsv"
-    log:
-        "logs/tblastn_{group}.log"
-    threads: ncpus
+        f"{{group}}/cmd.list"
+
     params:
         evalue = evalue,
         num_alignments = num_alignments,
-        outfmt = outfmt
+        outfmt = outfmt,
+        threads = ncpus
+    run:
+        if not op.exists(f'{wildcards.group}/results'):
+            os.makedirs(f'{wildcards.group}/results')
+        with open(output[0], 'w') as outfile:
+            for fasta in homo_protein_path_list:
+                base_fasta = op.basename(fasta)
+                print(f"tblastn -query {fasta} -db {input.target_fasta}.db -evalue {params.evalue} "
+                        f"-num_threads {params.threads} -num_alignments {params.num_alignments} "
+                        f"-outfmt {params.outfmt} -out {wildcards.group}/results/{fasta}.tsv", file=outfile)
+
+rule ParaBlast:
+    input:
+        "{group}/cmd.list"
+    
+    output:
+        "{group}/ParaBlast.ok",
+        # expand("{{group}}/results/{prefix}.id_{ID}{suffix}.tsv", 
+        #         fasta=(homo_proteins, ), prefix=(prefix, ), 
+        #         ID=homo_protein_list, suffix=(suffix, )) 
+    log:
+        "logs/tblastn_{group}.log"
+    threads: ncpus
     shell:
-        "tblastn -query {input.fasta} -db {input.target_fasta}.db -evalue {params.evalue} "
-        "-num_threads {threads} -num_alignments {params.num_alignments} "
-        "-outfmt {params.outfmt} -out {output}"
+        'ParaFly -c {input} -CPU {threads} -failed_cmds {wildcards.group}/FailedCommands 2>{log} &&'
+        'if [[ ! -s {wildcards.group}/FailedCommands ]]; then touch {output[0]}; else {wildcards.group}/ParaBlast.failed; fi' 
+
+# rule rescueFailedBlast:
+#     input:
+#         "{group}/ParaBlast.failed"
+#     output:
+#         "{group}/ParaBlast.ok"
+#     log:
+#         "logs/rescueFailedBlast_{group}.log"
+#     threads:
+#         ncpus
+#     shell:
+#         'if [[ ParaFly -c {wildcards.group}/FaileCommands -CPU {threads} -failed_cmds {wildcards.group}/FailedCommands.rescue'
+
 
 rule mergeBlastResult:
     input:
-        expand("{{group}}/results/{prefix}.part_{number}{suffix}.tsv", 
-                fasta=(homo_proteins, ), prefix=(prefix, ), 
-                number=numbers, suffix=(suffix, )) 
+        "{group}/ParaBlast.ok",
+        # expand("{{group}}/results/{prefix}.id_{ID}{suffix}.tsv", 
+        #         fasta=(homo_proteins, ), prefix=(prefix, ), 
+        #         ID=homo_protein_list, suffix=(suffix, )) 
     output:
         "{group}/{group}.tsv"
     shell:
-        "cat {input} > {output}"
+        "cat {wildcards.group}/results/*tsv > {output}"
 
 rule blast2fasta:
     input:

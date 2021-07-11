@@ -1,16 +1,14 @@
-
 ## homo protein fata
 homo_proteins: "homo.pro.fasta"
 
 ## groups of homologous 
 groups: "groups.db"
-## part number of split homo proteins
-homo_part_number: 50
+
 ## thread number of program
-ncpus: 2
+ncpus: 20
 
 ## evalue of tblastn
-evalue: 1e-3
+evalue: 1e-5
 
 ## num_alignments of tblastn
-num_alignments: 10
+num_alignments: 20
