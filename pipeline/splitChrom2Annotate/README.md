@@ -1,5 +1,5 @@
 # split genome to annotate by homologous
-pipeline for genome annotation, to split large genome to some parts.(version 1.1)
+pipeline to split large genome to serval parts for genome annotation, such as homologous groups.(version 1.2)
 ## Dependency
 - [`seqkit`](https://github.com/shenwei356/seqkit)
 - [`python >= 3.5`](https://python.org)
@@ -12,7 +12,7 @@ pipeline for genome annotation, to split large genome to some parts.(version 1.1
 - [`snakemake`](https://snakemake.readthedocs.io/en/stable/getting_started/installation.html)
 - [`biopython`](https://biopython.org/)
 - [`pandas`](https://pandas.pydata.org/)
-- [`pytools`](https://documen.tician.de/pytools/)
+
 ### split genome
 split genome by groups
 - requires
@@ -95,8 +95,7 @@ homo_proteins: "homo.pro.fasta"
 
 ## groups of homologous 
 groups: "groups.db"
-## part number of split homo proteins
-homo_part_number: 5
+
 ## thread number of program
 ncpus: 10
 
@@ -104,7 +103,7 @@ ncpus: 10
 evalue: 1e-5
 
 ## num_alignments of tblastn
-num_alignments: 10
+num_alignments: 20
 ```
 - run
 ```bash

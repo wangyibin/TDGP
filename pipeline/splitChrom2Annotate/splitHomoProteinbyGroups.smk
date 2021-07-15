@@ -8,7 +8,7 @@ import sys
 
 from Bio import SeqIO
 from collections import OrderedDict
-from pytools.persistent_dict import PersistentDict
+#from pytools.persistent_dict import PersistentDict
 
 groups_db_file = config['groups']
 groups_db = OrderedDict()
@@ -22,10 +22,10 @@ with open(groups_db_file) as fp:
 groups_list = list(groups_db)
 
 homo_proteins = config['homo_proteins']
-homo_part_number = config['homo_part_number']
+#homo_part_number = config['homo_part_number']
 prefix, suffix = op.splitext(homo_proteins)
 
-numbers = [ "{:03}".format(i) for i in range(1, 1+homo_part_number)]
+#numbers = [ "{:03}".format(i) for i in range(1, 1+homo_part_number)]
 ncpus = config['ncpus']
 
 evalue = config['evalue']
@@ -78,7 +78,7 @@ rule write_tblastn_cmd:
         evalue = evalue,
         num_alignments = num_alignments,
         outfmt = outfmt,
-        threads = ncpus
+        threads = 1
     run:
         if not op.exists(f'{wildcards.group}/results'):
             os.makedirs(f'{wildcards.group}/results')
@@ -87,7 +87,7 @@ rule write_tblastn_cmd:
                 base_fasta = op.basename(fasta)
                 print(f"tblastn -query {fasta} -db {input.target_fasta}.db -evalue {params.evalue} "
                         f"-num_threads {params.threads} -num_alignments {params.num_alignments} "
-                        f"-outfmt {params.outfmt} -out {wildcards.group}/results/{fasta}.tsv", file=outfile)
+                        f"-outfmt {params.outfmt} -out {wildcards.group}/results/{base_fasta}.tsv", file=outfile)
 
 rule ParaBlast:
     input:
@@ -127,26 +127,31 @@ rule mergeBlastResult:
     output:
         "{group}/{group}.tsv"
     shell:
-        "cat {wildcards.group}/results/*tsv > {output}"
+        "ls {wildcards.group}/results/*tsv | parallel -N0 cat {} > {output}"
+
 
 rule blast2fasta:
     input:
-        "{group}/{group}.tsv"
+        "{group}/{group}.tsv",
+        homo_proteins
     output:
-        homoFasta = "{group}/{group}.homo.fasta"
-    run:
-        gene_set = set()
-        with open(input[0]) as fp:
-        
-            for line in fp:
-                if line.startswith("#"):
-                    continue
-                gene = line.strip().split()[0]
-                gene_set.add(gene)
+        "{group}/{group}.homo.fasta"
+    shell:
+        "seqkit grep -f <(cut -f 1 {input[0]}) {input[1]} > {output}"
 
-        with open(output.homoFasta, 'w') as out:
-            fp = open(homo_proteins)
-            fa = SeqIO.parse(fp, 'fasta')
-            for record in fa:
-                if record.id in gene_set:
-                    SeqIO.write(record, out, 'fasta')
+    # run:
+    #     gene_set = set()
+    #     with open(input[0]) as fp:
+        
+    #         for line in fp:
+    #             if line.startswith("#"):
+    #                 continue
+    #             gene = line.strip().split()[0]
+    #             gene_set.add(gene)
+
+    #     with open(output.homoFasta, 'w') as out:
+    #         fp = open(homo_proteins)
+    #         fa = SeqIO.parse(fp, 'fasta')
+    #         for record in fa:
+    #             if record.id in gene_set:
+    #                 SeqIO.write(record, out, 'fasta')

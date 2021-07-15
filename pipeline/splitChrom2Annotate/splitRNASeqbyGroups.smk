@@ -81,7 +81,7 @@ rule extractFastqFromBam:
         bed = "{group}/{group}.bed"
     output:
         temp("{group}/{sample}.{group}_{ext}.fastq")
-    threads: ncpus
+    threads: 4
     shell:
         "samtools view -@ {threads} {input.bam} -L {input.bed} | "
         "parallel --pipe -k cut -f 1 | "
@@ -92,7 +92,7 @@ rule mergeFastq:
         expand("{{group}}/{sample}.{{group}}_{{ext}}.fastq", sample=SAMPLES)
     output:
         "{group}/{group}_{ext}.fastq.gz"
-    threads: ncpus
+    threads: 4
     shell:
         "cat {input} | pigz -p {threads} > {output}"
 
