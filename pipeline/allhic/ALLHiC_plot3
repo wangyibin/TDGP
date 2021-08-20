@@ -1,0 +1,377 @@
+#!/usr/bin/env python
+
+# modify from (https://github.com/tangerzhang/ALLHiC/tree/master/bin/ALLHIC_plot)
+# add multiprocessing to read bam file, and add mark ticks in heatmap
+
+"""
+%prog sample.sorted.bam groups.agp chrn.list [options]
+    This is used to plot chromatin matrix for ALLHIC results
+    sample.sorted.bam:
+        this bam file is come from allhic after sorted and 
+        index by samtools
+    groups.agp:
+        this file is created by allhic
+    chrn.list
+        this file containing chromosome ID and length
+
+"""
+
+
+import os
+import os.path as op
+import numpy as np
+import json
+import gc
+import sys
+import pysam
+from math import log
+import time
+from collections import OrderedDict
+from multiprocessing import Pool
+
+
+def accquire_time(text):
+    return time.strftime('[%H:%M:%S]',time.localtime(time.time())) + text
+
+
+# Get position of read based on contig with sam or bam file
+def get_read_pos_with_sam_bam_file(args):
+    ctgn,sam_bam_file, agp_file, read_on_chr = args
+    ctg_on_chr,_ = get_contig_pos_with_agp_file(agp_file)
+    if sam_bam_file[-3:] == "bam":
+        samfile = pysam.AlignmentFile(sam_bam_file, 'rb')
+    else:
+        samfile = pysam.AlignmentFile(sam_bam_file, 'r')
+    read_on_ctg_of_ctgn = {}
+    for record in samfile.fetch(ctgn):
+        read_id = record.qname
+        if record.is_unmapped:
+            continue
+        if record.is_paired:
+            ctg1 = record.reference_name
+            pos1 = record.reference_start
+            ctg2 = record.next_reference_name
+            pos2 = record.next_reference_start
+        res = convert_read_pos((read_id,ctg1,pos1,ctg2,pos2), ctg_on_chr)
+        if res:
+            read_on_ctg_of_ctgn[read_id] = res
+    
+    return read_on_ctg_of_ctgn
+
+
+def multi_get_read_on_ctg(ctg_list, sam_bam_file, agp_file, thread):
+
+    thread = int(thread)
+    read_on_chr = {}
+    task_list = [(ctgn, sam_bam_file, agp_file, read_on_chr) 
+                for ctgn in ctg_list]
+
+    pool = Pool(thread)
+    res = pool.map(get_read_pos_with_sam_bam_file, task_list)
+    for t in res:
+        read_on_chr.update(t)
+    del res, t
+    gc.collect()
+    pool.close()
+    return read_on_chr
+
+
+# Get position of contig based on chromosome with agp file
+def get_contig_pos_with_agp_file(agp_file):
+    ctg_on_chr = {}
+    ctg_on_chr_info = {}
+    with open(agp_file, 'r') as f_in:
+        for line in f_in:
+            if line.strip() == '':
+                continue
+            data = line.strip().split()
+            if data[4] == 'U':
+                continue
+            chrn = data[0]
+            start_pos = int(data[1])
+            end_pos = int(data[2])
+            ctg = data[5]
+            direct = data[-1]
+            ctg_on_chr[ctg] = [chrn, start_pos, end_pos, direct]
+            if chrn not in ctg_on_chr_info:
+                ctg_on_chr_info[chrn] = []
+            
+            ctg_on_chr_info[chrn].append((ctg, start_pos))
+    return ctg_on_chr, ctg_on_chr_info
+
+
+# Convert contig-based read position to chromosome-based read position
+def convert_read_pos( args, ctg_on_chr):
+
+    
+    read, ctg1, read_pos1, ctg2, read_pos2 = args
+    if ctg1 not in ctg_on_chr or ctg2 not in ctg_on_chr: 
+        return
+    chrn1, ctg_start_pos1, ctg_end_pos1, ctg_direct1 = ctg_on_chr[ctg1]
+    chrn2, ctg_start_pos2, ctg_end_pos2, ctg_direct2 = ctg_on_chr[ctg2]
+    if ctg_direct1 == '+':
+        converted_pos1 = ctg_start_pos1 + read_pos1 - 1
+    else:
+        converted_pos1 = ctg_end_pos1 - read_pos1 + 1
+    if ctg_direct2 == '+':
+        converted_pos2 = ctg_start_pos2 + read_pos2 - 1
+    else:
+        converted_pos2 = ctg_end_pos2 - read_pos2 + 1
+    res = (chrn1, converted_pos1, chrn2, converted_pos2)
+        #f_pos.write('%s\t%s\t%d\t%s\t%d\n'%(read, chrn1, converted_pos1, chrn2, converted_pos2))    
+
+    return res
+
+
+# Get chromosome length
+def get_chr_len(chr_list):
+    chr_len_db = {}
+    chr_order = []
+    with open(chr_list, 'r') as f_in:
+        for line in f_in:
+            if line.strip() == '':
+                continue
+            data = line.strip().split()
+            chr_order.append(data[0])
+            chr_len_db[data[0]] = int(data[1])
+    return chr_len_db, chr_order
+
+
+# Calc read counts on each bin
+def calc_read_count_per_bin(chr_len_db, chr_order, read_on_chr, bin_size):
+    long_bin_size = bin_size.upper()
+    long_bin_size = long_bin_size.replace('K', '000')
+    long_bin_size = long_bin_size.replace('M', '000000')
+    long_bin_size = long_bin_size.replace('G', '000000000')
+    long_bin_size = int(long_bin_size)
+    
+    read_count_per_chr = {}
+    read_count_whole_genome = {}
+    chrn_bin_count_dict = OrderedDict({})
+    bin_offset = [0 for i in range(0, len(chr_order)+1)]
+    bin_count = [0 for i in range(0, len(chr_order)+1)]
+    total_bin_count = 0
+    
+    for chrn in chr_order:
+        bin_count_of_chr = int(round((chr_len_db[chrn]*1.0/long_bin_size+0.5)))
+        total_bin_count += bin_count_of_chr
+        bin_count[chr_order.index(chrn)+1] = bin_count_of_chr
+        read_count_per_chr[chrn] = np.zeros((bin_count_of_chr, bin_count_of_chr))
+        chrn_bin_count_dict[chrn] = total_bin_count
+    for i in range(0, len(bin_count)):
+        for j in range(0, i+1):
+            bin_offset[i] += bin_count[j]
+    
+    read_count_whole_genome = np.zeros((total_bin_count, total_bin_count))
+    
+    print(accquire_time('\t calculating read count matrix')) 
+    for read in read_on_chr:
+        chr1, pos1, chr2, pos2 = read_on_chr[read]
+        if chr1 not in chr_len_db or chr2 not in chr_len_db:
+            continue
+        pos1_index = int(pos1/long_bin_size)
+        pos2_index = int(pos2/long_bin_size)
+        if chr1 == chr2 and chr1 in read_count_per_chr:
+            read_count_per_chr[chr1][pos1_index][pos2_index] += 1
+            read_count_per_chr[chr1][pos2_index][pos1_index] += 1
+
+        chr1_index = chr_order.index(chr1)
+        chr2_index = chr_order.index(chr2)
+
+        whole_pos1 = bin_offset[chr1_index] + pos1_index
+        whole_pos2 = bin_offset[chr2_index] + pos2_index
+        read_count_whole_genome[whole_pos1][whole_pos2] += 1
+        read_count_whole_genome[whole_pos2][whole_pos1] += 1
+    
+    print(accquire_time('\t calculating log2 of matrix'))
+    with np.errstate(divide='ignore'):
+        for chrn in read_count_per_chr:
+            read_count_per_chr[chrn] = np.log2(read_count_per_chr[chrn])
+        read_count_whole_genome = np.log2(read_count_whole_genome)
+    
+    return read_count_per_chr, read_count_whole_genome, chrn_bin_count_dict
+
+
+def calc_bin_size(bin_size):
+    bin_size = bin_size.upper()
+    bin_size = bin_size.replace('K', '000')
+    bin_size = bin_size.replace('M', '000000')
+    bin_size = bin_size.replace('G', '000000000')
+
+    return int(bin_size)
+
+
+def calc_ctg_on_chr_bin(chrn_bin_count_dict, ctg_on_chr_info, bin_size):
+    bin_size = calc_bin_size(bin_size)
+    func = lambda x: (x[0], int((round((x[1]*1.0/bin_size)))))
+    for chrn in chrn_bin_count_dict:
+        ctg_on_chr_info[chrn] = list(map(func, ctg_on_chr_info[chrn]))
+    return ctg_on_chr_info
+
+# Draw heatmap of all chromosomes in one picture
+def draw_heatmap_in_one(data, bin_size, chr_order, ext):
+    import matplotlib as mpl
+    mpl.use('Agg')
+    import matplotlib.pyplot as plt
+
+    short_bin_size = bin_size.upper()
+    if bin_size[-9:] == '000000000':
+        short_bin_size = bin_size[:-9]+'G'
+    elif bin_size[-6:] == '000000':
+        short_bin_size = bin_size[:-6]+'M'
+    elif bin_size[-3:] == '000':
+        short_bin_size = bin_size[:-3]+'K'
+
+    file_prefix = short_bin_size + '_all_chrs'
+    print(accquire_time(' Draw '+file_prefix))
+    chr_cnt = len(data)
+    row_cnt = int(round(np.sqrt(chr_cnt)+0.5))
+    col_cnt = int(round(chr_cnt*1.0/row_cnt+0.5))
+    plt.figure(figsize=(col_cnt*2, row_cnt*2))
+    i = 1
+    for chrn in chr_order:
+        plt.subplot(row_cnt, col_cnt, i)
+        i += 1
+        ax = plt.gca()
+        cmap = plt.get_cmap('YlOrRd')
+        cmap.set_over('black')
+        with np.errstate(divide='ignore'):
+            hmap = ax.imshow(data[chrn], interpolation='nearest', origin='lower', cmap=cmap, aspect='auto')
+        plt.tick_params(labelsize=5)
+        plt.title(chrn)
+
+    plt.subplots_adjust(left=None, bottom=None, right=None, top=None, wspace=0.5, hspace=0.5)
+    plt.savefig(file_prefix+'.'+ext, filetype=ext, bbox_inches='tight', dpi=200)
+    plt.close('all')
+
+# Draw heatmap of allhic result with matplotlib
+def draw_heatmap(data, chrn, bin_size, chrn_bin_count_dict, 
+        ctg_on_chr_info, ext, mark_ticks=False):
+    
+    import matplotlib as mpl
+    mpl.use('Agg')
+    import matplotlib.pyplot as plt
+
+    short_bin_size = bin_size.upper()
+    short_bin_size = short_bin_size.replace('000000000', 'G')
+    short_bin_size = short_bin_size.replace('000000', 'M')
+    short_bin_size = short_bin_size.replace('000', 'K')
+
+    ax = plt.gca()
+    
+    if chrn != 'all':
+        file_prefix = short_bin_size + "_" + chrn
+    else:
+        file_prefix = short_bin_size + '_Whole_genome'
+    
+    print(accquire_time(' Draw '+file_prefix))
+    
+    # mpl.cm.YlOrRd
+    cmap = plt.get_cmap('YlOrRd')
+    cmap.set_over('black')
+    if chrn != 'all':
+        hmap = ax.imshow(data, interpolation='nearest', origin='lower', cmap=cmap, aspect='auto')
+        if mark_ticks:
+            chrn_ticks = list(zip(*ctg_on_chr_info[chrn]))[1]
+            chrn_ticklabels = list(zip(*ctg_on_chr_info[chrn]))[0]
+            ax.set_xticks(chrn_ticks)
+            ax.set_xticklabels(chrn_ticklabels, ha='left')
+            ax.set_yticks(chrn_ticks)
+            ax.set_yticklabels(chrn_ticklabels, va='bottom')
+
+    else:
+        hmap = ax.imshow(data, interpolation='nearest', cmap=cmap, aspect='auto')
+        if mark_ticks:
+            ax.set_xticks(chrn_bin_count_dict.values())
+            ax.set_xticklabels(chrn_bin_count_dict.keys(), ha='right')
+            ax.set_yticks(chrn_bin_count_dict.values())
+            ax.set_yticklabels(chrn_bin_count_dict.keys(), va='top')
+        else:
+            ax.set_xticks([])
+            ax.set_xticks([])
+
+    plt.colorbar(mappable=hmap,cax=None, ax=None, shrink=0.5)
+    plt.tick_params(labelsize=6, direction='out')
+    for ticks in ax.get_xticklabels():
+        ticks.set_rotation(90)
+    for ticks in ax.get_yticklabels():
+        ticks.set_rotation(0)
+    
+    if chrn != 'all':
+        title = chrn+'_'+short_bin_size
+    else:
+        title = 'Whole_genome_'+short_bin_size
+    
+    plt.xlabel("Bins ("+short_bin_size.lower()+"b per bin)", fontsize=8)
+    if chrn == 'all':
+        plt.title(title, y=1.01, fontsize=12)
+    else:
+        plt.title(title, y=1.1, fontsize=12)
+
+    plt.savefig(file_prefix+'.'+ext, filetype=ext, bbox_inches='tight', dpi=200)
+    plt.close('all')
+
+
+
+if __name__ == "__main__":
+    from optparse import OptionParser
+    p = OptionParser(__doc__)
+    p.add_option('-t','--thread', dest='thread',type='int',default=1,
+                help='the thread of script [default: %default]')
+    p.add_option('--bin_size', dest='bin_size',default='500K',
+                help='the bin size of heatmap, it can be a list '
+                'splitted by comma [default: %default]')
+    p.add_option('--ext', dest='ext', default='pdf',
+                help='the extention of plot, e.g. pdf, svg, png '
+                '[default: %default]')
+    p.add_option('--mark_ticks', dest='mark_ticks', default=False,
+                action='store_true', help='if mark ticks in the heatmap '
+                '[default: %default]')
+    #p.add_option('--ctg_suffix',dest='ctg_suffix',default='_pilon',
+    #           help='the suffix of contig [default: %default]')
+
+    opts, args = p.parse_args()
+    if len(args) != 3:
+        sys.exit(p.print_help())
+
+    sam_bam_file, agp_file, chr_list = args
+    bin_list = opts.bin_size
+    ext = opts.ext
+    thread = opts.thread
+    mark_ticks = opts.mark_ticks
+    #ctg_suffix = opts.ctg_suffix
+
+    print(accquire_time(" Step 1: Get read position based on chromosome"))
+    ctg_on_chr, ctg_on_chr_info = get_contig_pos_with_agp_file(agp_file)
+    ctg_list = ctg_on_chr.keys()
+    read_on_chr = multi_get_read_on_ctg(ctg_list, sam_bam_file, agp_file, thread)
+    del ctg_on_chr
+    gc.collect()
+
+    print(accquire_time(" Step 2: Get chromosome length"))
+    chr_len_db, chr_order = get_chr_len(chr_list)
+        
+    print(accquire_time(" Step 3: Calculating and Drawing heatmap"))
+    bin_size_list = bin_list.split(',')
+    
+    for bin_size in bin_size_list:
+        print(accquire_time(" Calculating"))
+        read_count_per_chr, read_count_whole_genome, chrn_bin_count_dict = calc_read_count_per_bin(chr_len_db, chr_order, read_on_chr, bin_size)
+        ctg_on_chr_info = calc_ctg_on_chr_bin(chrn_bin_count_dict, ctg_on_chr_info, bin_size)   
+        
+        print(accquire_time(" Drawing heatmap"))        
+        print(accquire_time(" Drawing with bin size ")+str(bin_size))
+        for chrn in read_count_per_chr:
+            draw_heatmap(read_count_per_chr[chrn], chrn, bin_size, 
+                            chrn_bin_count_dict, ctg_on_chr_info, ext, mark_ticks)
+            
+        draw_heatmap(read_count_whole_genome, 'all', bin_size, chrn_bin_count_dict, 
+                        ctg_on_chr_info, ext, mark_ticks)
+        chr_order = list(chrn_bin_count_dict.keys())
+        draw_heatmap_in_one(read_count_per_chr, bin_size, chr_order, ext)
+        del read_count_per_chr, read_count_whole_genome
+        gc.collect()
+        
+    del read_on_chr
+    gc.collect()
+    print(accquire_time(" Success"))
