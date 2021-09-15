@@ -34,13 +34,21 @@ import pandas as pd
 from hicexplorer.reduceMatrix import reduce_matrix
 from intervaltree import Interval, IntervalTree
 from multiprocessing import Lock, Pool
-from scipy.sparse import coo_matrix, tril, triu
+from scipy.sparse import coo_matrix, csr_matrix, triu
 
 logging.getLogger('matplotlib').setLevel(logging.ERROR)
 logging.getLogger('cooler').setLevel(logging.ERROR)
 logging.getLogger('numexpr').setLevel(logging.ERROR)
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger(op.basename(__file__))
+
+HIC_METADATA = {}
+HIC_METADATA['matrix-generated-by'] = np.string_(
+    'ALLHiC_plotMatrix'
+)
+HIC_METADATA['matrix-generated-by-url'] = np.string_(
+    'https://github.com/tangerzhang/ALLHiC'
+)
 
 
 lock = Lock()
@@ -312,45 +320,57 @@ def chrRangeID(args, axis=0):
     else:
         return 
 
+class OrderContigMatrix(object):
+    """
+    reorder the contig matrix to chromosome order
+    """
+    def __init__(self):
+        pass
+    
+
 class sumSmallContig(object):
     """
     Sum small conitg count into one chromosome bin
     """
     def __init__(self, cool_path, contig2chrom, edges,
-                    columns, map, batchsize=100):
+                    columns, map, batchsize=1000):
 
         self._map = map
         self.cool_path = cool_path
         self.contig2chrom = contig2chrom
-
-        self.chrom2contig = self.contig2chrom.reset_index().set_index('chromidx')
-        contig2chrom_index = self.chrom2contig.groupby(self.chrom2contig.index)[
-            'contigidx'].aggregate(list)
-        contig2chrom_index = contig2chrom_index.apply(
-            lambda x: x if len(x) == 1 else [x[0]]).values
-        self.contig2chrom_index = [i for sublist in contig2chrom_index 
-                                                            for i in sublist]
-
+        self.chromidx = contig2chrom.index.values
+        self.contigidx = contig2chrom['contigidx'].values
+        
+        # self.chrom2contig = self.contig2chrom.reset_index().set_index('chromidx')
+        contig2chrom_index = np.searchsorted(self.chromidx, np.unique(
+                    self.chromidx), side='left')
+        self.contig2chrom_index = contig2chrom_index
+        self.contig_edges = list(zip(contig2chrom_index[:-1], 
+                                    contig2chrom_index[1:]))
         self.batchsize = batchsize 
  
         self.newbins_index = self.contig2chrom.index.values
         self.index_columns = ['bin1_id', 'bin2_id']
         self.value_coumns = list(columns)
         self.agg = {'count': 'sum'}
-        self.edges = edges
-        
-        self.i = 0
 
+        edges = []
+        for i in range(0, len(self.contig2chrom_index), 1000):
+            tmp_list = self.contig2chrom_index[i: i+1000]
+            edges.append(tmp_list[-1])
+        edges = np.r_[0, edges]
+        self.edges = list(zip(edges[:-1], edges[1:]))
+        
+        
     def _aggregate(self, span):
 
         cool = cooler.Cooler(self.cool_path)
         pixels = cool.matrix(balance=False, sparse=True, as_pixels=True)
-
         contig2chrom_index = self.contig2chrom_index
-        lo, hi = span
-      
-        chunk = pixels[lo: hi]
 
+        lo, hi = span
+        chunk = pixels[lo: hi]
+       
         old_bin1_id = chunk['bin1_id'].values
         old_bin2_id = chunk['bin2_id'].values
         
@@ -360,8 +380,9 @@ class sumSmallContig(object):
                                             side='right') - 1
         
         return (chunk.groupby(self.index_columns, sort=True)
-                .aggregate(self.agg)
-                .reset_index())
+                    .aggregate(self.agg)
+                    .reset_index())
+      
 
     def aggregate(self, span):
         try:
@@ -375,6 +396,7 @@ class sumSmallContig(object):
         
         batchsize = self.batchsize
         spans = self.edges
+    
         for i in range(0, len(spans), batchsize):
             try:
                 if batchsize > 1:
@@ -418,12 +440,14 @@ def sum_small_contig(cool_path, contig2chrom, new_bins, output,
         )
 
 
-        kwargs.setdefault("append", True)
+        #kwargs.setdefault("append", True)
         create(output, new_bins, iterator, dtypes=dtypes, **kwargs)
     
     finally:
         if threads > 1:
             pool.close()
+
+
 
 
 def ALLHiC_plotMatrix(args=None):
@@ -477,14 +501,14 @@ def ALLHiC_plotMatrix(args=None):
 
     func = lambda row: chrRangeID(row.values)
     split_contig_on_chrom_df['chrom_region'] = split_contig_on_chrom_df[[
-                                                'chrom', 'start', 'end']].apply(func, axis=1)
-    split_contig_on_chrom_df['contig_region'] = split_contig_on_chrom_df[['contig',
-                                                'tig_start', 'tig_end']].apply(func, axis=1)
+                            'chrom', 'start', 'end']].apply(func, axis=1)
+    split_contig_on_chrom_df['contig_region'] = split_contig_on_chrom_df[[
+                            'contig','tig_start', 'tig_end']].apply(func, axis=1)
 
     split_contig_on_chrom_df['chromidx'] = chrom_bins_index.loc[
-                                               split_contig_on_chrom_df['chrom_region']]['chromidx'].values
+                            split_contig_on_chrom_df['chrom_region']]['chromidx'].values
     split_contig_on_chrom_df['contigidx'] = contig_bins_index.loc[
-                                                split_contig_on_chrom_df['contig_region']]['contigidx'].values
+                            split_contig_on_chrom_df['contig_region']]['contigidx'].values
 
     split_contig_on_chrom_df.drop(['chrom', 'start', 'end',
                                     'contig', 'tig_start', 'tig_end',
@@ -504,34 +528,31 @@ def ALLHiC_plotMatrix(args=None):
 
     reordered_contigidx = contig2chrom['contigidx'].values
 
+  
     reordered_matrix = matrix[:].tocsr()[:, reordered_contigidx][reordered_contigidx, :]
     reordered_contig_bins = contig_bins[:].loc[reordered_contigidx].reset_index(drop=True)
 
-    hic_metadata = {}
-    hic_metadata['matrix-generated-by'] = np.string_(
-        'ALLHiC_plotMatrix'
-    )
-    hic_metadata['matrix-generated-by-url'] = np.string_(
-        'https://github.com/tangerzhang/ALLHiC'
-    )
-
     
-    reordered_matrix = triu(reordered_matrix)
-    chrom_pixels = pd.Series.sparse.from_coo(reordered_matrix.tocoo())
-    chrom_pixels = pd.DataFrame(chrom_pixels).reset_index()
-    chrom_pixels.columns = ['bin1_id', 'bin2_id', 'count']
+    reordered_matrix = triu(reordered_matrix).tocoo()
+    # chrom_pixels = pd.Series.sparse.from_coo(reordered_matrix.tocoo())
+    # chrom_pixels = pd.DataFrame(chrom_pixels).reset_index()
+    # chrom_pixels.columns = ['bin1_id', 'bin2_id', 'count']
+    chrom_pixels = dict(zip(['bin1_id', 'bin2_id', 'count'],
+                            [reordered_matrix.row,
+                            reordered_matrix.col,
+                            reordered_matrix.data]))
 
     
     cooler.create_cooler(args.matrix.rsplit(".", 1)[
                          0] + ".chrom.cool", reordered_contig_bins, 
-                         chrom_pixels, metadata=hic_metadata)
+                         chrom_pixels, metadata=HIC_METADATA)
     log.info('Successful, reorder the contig-level matrix, and output into `{}`')
 
     contig2chrom['contigidx'] = range(len(contig2chrom))
     contig2chrom = contig2chrom.reset_index().set_index('chromidx')
-    print(chrom_bin_interval_df)
+ 
     sum_small_contig(args.matrix.rsplit(".", 1)[0] + ".chrom.cool", 
-                contig2chrom, chrom_bin_interval_df, 'out.cool', metadata=hic_metadata)
+                contig2chrom, chrom_bin_interval_df, 'out.cool', metadata=HIC_METADATA)
      
     log.info('Done, elasped time {} s'.format(time.time() - start_time))
 
@@ -539,4 +560,5 @@ def ALLHiC_plotMatrix(args=None):
 if __name__ == "__main__":
     #ALLHiC_plotMatrix(sys.argv[1:])
     os.chdir('/share/home/stu_wangyibin/test/ALLHiC_plot')
+    #ALLHiC_plotMatrix(['--agp', 'groups.agp', '--matrix', 'sample.cool'])
     ALLHiC_plotMatrix(['--agp', 'chrn.V2.agp', '--matrix', 'JGY.cool'])
