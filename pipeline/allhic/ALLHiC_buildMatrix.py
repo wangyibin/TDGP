@@ -49,7 +49,7 @@ def parse_arguments(args=None):
             metavar='cool',
             required=True)
     pOpt.add_argument('--binSize', '-bs',
-            default=100000, type=int,
+            default=10000, type=int,
             help='Size in bp for the bins. [default: %(default)s]')
     pOpt.add_argument('--mapq', default=None, type=int,
             help='map quality of alignments [default: %(default)s]')

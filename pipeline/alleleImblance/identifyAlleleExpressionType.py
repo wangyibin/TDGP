@@ -24,15 +24,16 @@ def import_table(table):
                      index_col=None)
     return df 
 
-def getExpType_single(log2fc):
-    if log2fc > 2:
+def getExpType_single(value):
+    if value > log2fc[1]:
         return "A>B"
-    elif log2fc < -2:
+    elif value < log2fc[0]:
         return "A<B"
     else:
         return np.nan
 
 def getExpType(df, log2fc=(-2, 2), pvalue=0.05, FDR=0.05):
+    globals()['log2fc'] = log2fc
     sign_df = df[(df.pvalue < pvalue) & (df.FDR < FDR)]
     deg_df = sign_df[(sign_df.log2fc < log2fc[0]) | (sign_df.log2fc > log2fc[1])]
     deg_df = deg_df.reset_index(drop=True)
@@ -49,7 +50,7 @@ def getOnlyType(df):
     return res_df
 
 def getConsistentOrInconsistent_single(row):
-    types = row.to_list()
+    types = row.tolist()
     types = list(filter(lambda x: pd.notna(x), types))
     if len(types) <= 1:
         return np.nan

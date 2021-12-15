@@ -34,6 +34,7 @@ import pandas as pd
 from hicexplorer.reduceMatrix import reduce_matrix
 from intervaltree import Interval, IntervalTree
 from multiprocessing import Lock, Pool
+from pandarallel import pandarallel
 from scipy.sparse import coo_matrix, csr_matrix, triu
 
 logging.getLogger('matplotlib').setLevel(logging.ERROR)
@@ -73,6 +74,8 @@ def parse_arguments(args=None):
             help='Size in bp for the plotting heatmap bins. [default: %(default)s]')
     pOpt.add_argument('--chromSize', default=None,
             help='chromosome size and chromosome order of heatmap, [default: from agp]')
+    pOpt.add_argument('-t', '--threads', type=int, default=8,
+            help='number of program threads[default:%(default)s]')
     pOpt.add_argument('--cmap', default='YlOrRd',
             help='colormap of heatmap [default: %(default)s]')
     pOpt.add_argument('-o', '--outprefix', 
@@ -94,8 +97,8 @@ def import_agp(agpfile, split=True):
     """
     import agp file and return a dataframe
     """
-    df = pd.read_csv(agpfile, sep='\t',
-                     header=None, index_col=None)
+    df = pd.read_csv(agpfile, sep='\t', comment='#',
+                     header=None, index_col=None,)
     log.info('load agp file: `{}`'.format(agpfile))
     
     if split:
@@ -103,7 +106,8 @@ def import_agp(agpfile, split=True):
         gap_df = df[df[4] == 'U']
         tig_df.columns = AGP_NAMES_tig
         gap_df.columns = AGP_NAMES_gap
-        tig_df = tig_df.astype({'chrom': 'category', 'orientation': 'category'})
+        tig_df = tig_df.astype(
+            {'chrom': 'category', 'orientation': 'category'})
         gap_df = gap_df.astype({'chrom': 'category'})
 
         tig_df.set_index('chrom', inplace=True)
@@ -146,7 +150,7 @@ def get_bins(bin_size, chrom_size, start=0, orientation="+",
     for chrom, size in chrom_size:
         length = size - start
         if orientation == "-":
-            #print(length, length % bin_size, start, start + bin_size)
+      
             if length % bin_size > 0:
                 old_start = start 
                 start = start + (length % bin_size)
@@ -210,12 +214,13 @@ def getContigIntervalTreeFromAGP(agp_df):
         if chrom not in contig_bin_interval_tree:
             contig_bin_interval_tree[chrom] = IntervalTree()
         
-        contig_bin_interval_tree[chrom].add(Interval(start, end, (contig, orientation)))
-    
+        contig_bin_interval_tree[chrom].add(
+            Interval(start, end, (contig, orientation)))
+
     return contig_bin_interval_tree
 
 
-def splitAGPByBinSize(agp_df, bin_size=10000):
+def splitAGPByBinSize(agp_df, bin_size=1000):
     r"""
     split chromosome regions into specifial intervals for agp file
 
@@ -224,25 +229,25 @@ def splitAGPByBinSize(agp_df, bin_size=10000):
     for i, row in agp_df.iterrows():
         row.start = row.start - 1
         row.tig_start = int(row.tig_start) - 1
-        row.tig_end = int(row.tig_end) + 1
+        #row.tig_end = int(row.tig_end) + 1
         if int(row.end - row.start + 1) <= bin_size:
             tmp_row = row.copy()
             db.append(tmp_row)
         else:
-            tmp_chrom_bins = get_bins(bin_size,  [(row.name, int(row.end))], 
-                                start=row.start, orientation=row.orientation)
+            tmp_chrom_bins = get_bins(bin_size,  [(row.name, int(row.end))],
+                                      start=row.start, orientation=row.orientation)
             tmp_contig_bins = get_bins(
-                bin_size, [(row.id, int(row.tig_end))], start=0, 
+                bin_size, [(row.id, int(row.tig_end))], start=0,
                 reverse=False if row.orientation == "+" else True)
-    
+
             for (_, start, end), (_, tig_start, tig_end) in \
-                     zip(tmp_chrom_bins, tmp_contig_bins):
-                
+                    zip(tmp_chrom_bins, tmp_contig_bins):
+
                 tmp_row = row.copy()
                 tmp_row['start', 'end', 'tig_start', 'tig_end'] = start, \
-                                    end, tig_start, tig_end
+                    end, tig_start, tig_end
                 db.append(tmp_row)
-    
+
     res_df = pd.concat(db, axis=1).T
 
     return res_df
@@ -276,18 +281,18 @@ def getContigOnChromBins(chrom_bins, contig_on_chrom_bins):
     _file1 = tempfile.NamedTemporaryFile(delete=False)
     _file2 = tempfile.NamedTemporaryFile(delete=False)
     _file3 = tempfile.NamedTemporaryFile(delete=False)
-    
+
     chrom_bins.to_csv(_file1.name, sep='\t', header=None, index=None)
-    contig_on_chrom_bins.to_csv(_file2.name, 
-                                    sep='\t', index=True, header=None)
+    contig_on_chrom_bins.to_csv(_file2.name,
+                                sep='\t', index=True, header=None)
 
     os.system('bedtools intersect -a {} -b {} -F 0.5 -wo > {} 2>/dev/null'.format(
         _file1.name, _file2.name, _file3.name))
 
     df = pd.read_csv(_file3.name, sep='\t',
-                        header=None, index_col=None,
-                        dtype={0: 'category', 
-                                9: 'category'})
+                     header=None, index_col=None,
+                     dtype={0: 'category',
+                               9: 'category'})
     _file1.close()
     _file2.close()
     _file3.close()
@@ -340,27 +345,31 @@ class sumSmallContig(object):
         self.contig2chrom = contig2chrom
         self.chromidx = contig2chrom.index.values
         self.contigidx = contig2chrom['contigidx'].values
+        self.contig2chrom = self.contig2chrom.reset_index()
+
+       
+        contig2chrom_index = self.contig2chrom.groupby('chromidx')['contigidx'].aggregate(list)
+
+        contig2chrom_index = contig2chrom_index.apply(lambda x: x[0])
+
+        self.contig2chrom_index = contig2chrom_index.values
+        # self.contig_edges = list(zip(contig2chrom_index[:-1], 
+        #                             contig2chrom_index[1:]))
         
-        # self.chrom2contig = self.contig2chrom.reset_index().set_index('chromidx')
-        contig2chrom_index = np.searchsorted(self.chromidx, np.unique(
-                    self.chromidx), side='left')
-        self.contig2chrom_index = contig2chrom_index
-        self.contig_edges = list(zip(contig2chrom_index[:-1], 
-                                    contig2chrom_index[1:]))
         self.batchsize = batchsize 
- 
+
         self.newbins_index = self.contig2chrom.index.values
         self.index_columns = ['bin1_id', 'bin2_id']
         self.value_coumns = list(columns)
         self.agg = {'count': 'sum'}
-
+        
         edges = []
-        for i in range(0, len(self.contig2chrom_index), 1000):
-            tmp_list = self.contig2chrom_index[i: i+1000]
+        for i in range(0, len(self.contig2chrom_index), batchsize):
+            tmp_list = self.contig2chrom_index[i: i+batchsize]
             edges.append(tmp_list[-1])
         edges = np.r_[0, edges]
         self.edges = list(zip(edges[:-1], edges[1:]))
-        
+       
         
     def _aggregate(self, span):
 
@@ -369,16 +378,16 @@ class sumSmallContig(object):
         contig2chrom_index = self.contig2chrom_index
 
         lo, hi = span
-        chunk = pixels[lo: hi]
-       
+        chunk = pixels[lo: hi+1]
+        
         old_bin1_id = chunk['bin1_id'].values
         old_bin2_id = chunk['bin2_id'].values
-        
+     
         chunk['bin1_id'] = np.searchsorted(contig2chrom_index, old_bin1_id, 
                                             side='right') - 1
         chunk['bin2_id'] = np.searchsorted(contig2chrom_index, old_bin2_id, 
                                             side='right') - 1
-        
+
         return (chunk.groupby(self.index_columns, sort=True)
                     .aggregate(self.agg)
                     .reset_index())
@@ -420,6 +429,7 @@ def sum_small_contig(cool_path, contig2chrom, new_bins, output,
     edges = np.r_[0, np.cumsum(new_bins.groupby(
         'chrom').count().reset_index()['start'].tolist())]
     edges = list(zip(edges[:-1], edges[1:]))
+ 
     if dtypes is None:
         dtypes = {}
     input_dtypes = cool.pixels().dtypes
@@ -439,7 +449,6 @@ def sum_small_contig(cool_path, contig2chrom, new_bins, output,
             map=pool.map if threads > 1 else map, 
         )
 
-
         #kwargs.setdefault("append", True)
         create(output, new_bins, iterator, dtypes=dtypes, **kwargs)
     
@@ -447,8 +456,16 @@ def sum_small_contig(cool_path, contig2chrom, new_bins, output,
         if threads > 1:
             pool.close()
 
+def coarsen_matrix(cool, k):
+    """
+    coarsen a matrix
 
-
+    Params:
+    --------
+    cool: `str` cool path
+    k: factor 
+    """
+    pass
 
 def ALLHiC_plotMatrix(args=None):
 
@@ -459,6 +476,10 @@ def ALLHiC_plotMatrix(args=None):
     cool = cooler.Cooler(args.matrix)
     agp_df, _ = import_agp(args.agp)
     bin_size = int(cool.binsize)
+
+    if not args.outprefix:
+        outprefix = op.basename(cool).rsplit(".", 1)[0]
+    
     ## get chromosome size database from arguments or agp file
     if not args.chromSize:
         chrom_sizes = agp_df.groupby(agp_df.index)['end'].max()
@@ -472,6 +493,7 @@ def ALLHiC_plotMatrix(args=None):
     chrom_sizes = [i for _, i in chrom_sizes.iterrows()]
     chrom_bin_interval_df = pd.DataFrame(get_bins(bin_size, chrom_sizes), 
                                     columns=['chrom', 'start', 'end'])
+    chrom_regions = chrom_bin_interval_df.apply(lambda x: chrRangeID(x.values), axis=1)
     contig_bins = cool.bins()
 
     new_agp = splitAGPByBinSize(agp_df, bin_size=bin_size)
@@ -479,44 +501,46 @@ def ALLHiC_plotMatrix(args=None):
     split_contig_on_chrom_df = getContigOnChromBins(
         chrom_bin_interval_df, new_agp.drop(['number', 'type'], axis=1))
     split_contig_on_chrom_df.drop(['orientation'], inplace=True, axis=1)
-    
-    # count_type = matrix[0]['count'].dtype
-    # use_type = np.int32 if np.iinfo(np.int32).max >= chrom_bin_length else np.int64
-    
-    # chrom_matrix = coo_matrix((chrom_bin_length, chrom_bin_length), dtype=count_type)
-    # row = np.zeros(cool.info['nnz'], dtype=use_type)
-    # col = np.zeros(cool.info['nnz'], dtype=use_type)
-    # data = np.zeros(cool.info['nnz'], dtype=count_type)
-    
 
-    contig_bins_index = contig_bins[:].apply(lambda x: chrRangeID(x.values), axis=1)
+    pandarallel.initialize(nb_workers=args.threads, verbose=0)
+    contig_bins_index = contig_bins[:].parallel_apply(
+        lambda x: chrRangeID(x.values), axis=1)
     contig_bins_index = contig_bins_index.to_frame().reset_index()
-    contig_bins_index.rename(columns={'index': 'contigidx', 0: 'contig_region'}, inplace=True)
+    contig_bins_index.rename(
+        columns={'index': 'contigidx', 0: 'contig_region'}, inplace=True)
     contig_bins_index.set_index('contig_region', inplace=True)
 
-    chrom_bins_index = chrom_bin_interval_df.apply(lambda x: chrRangeID(x.values), axis=1)
+    chrom_bins_index = chrom_bin_interval_df.parallel_apply(
+        lambda x: chrRangeID(x.values), axis=1)
     chrom_bins_index = chrom_bins_index.to_frame().reset_index()
-    chrom_bins_index.rename(columns={'index': 'chromidx', 0: 'chrom_region'}, inplace=True)
+    chrom_bins_index.rename(
+        columns={'index': 'chromidx', 0: 'chrom_region'}, inplace=True)
     chrom_bins_index.set_index('chrom_region', inplace=True)
 
-    func = lambda row: chrRangeID(row.values)
+    def func(row): return chrRangeID(row.values)
     split_contig_on_chrom_df['chrom_region'] = split_contig_on_chrom_df[[
-                            'chrom', 'start', 'end']].apply(func, axis=1)
+        'chrom', 'start', 'end']].parallel_apply(func, axis=1)
     split_contig_on_chrom_df['contig_region'] = split_contig_on_chrom_df[[
-                            'contig','tig_start', 'tig_end']].apply(func, axis=1)
+        'contig', 'tig_start', 'tig_end']].parallel_apply(func, axis=1)
 
-    split_contig_on_chrom_df['chromidx'] = chrom_bins_index.loc[
-                            split_contig_on_chrom_df['chrom_region']]['chromidx'].values
+    cat_dtype = pd.CategoricalDtype(categories=chrom_regions,    
+                                        ordered=True)
+    split_contig_on_chrom_df['chrom_region'] = \
+        split_contig_on_chrom_df['chrom_region'].astype(cat_dtype)
+    split_contig_on_chrom_df['chromidx'] = \
+        split_contig_on_chrom_df['chrom_region'].cat.codes.values
+   
+    
     split_contig_on_chrom_df['contigidx'] = contig_bins_index.loc[
-                            split_contig_on_chrom_df['contig_region']]['contigidx'].values
+        split_contig_on_chrom_df['contig_region']]['contigidx'].values
 
     split_contig_on_chrom_df.drop(['chrom', 'start', 'end',
-                                    'contig', 'tig_start', 'tig_end',
-                                    'chrom_region', 'contig_region'], 
-                                    inplace=True, axis=1)
+                                   'contig', 'tig_start', 'tig_end',
+                                   'chrom_region', 'contig_region'],
+                                  inplace=True, axis=1)
+
     
-    
-    log.info('starting')
+    log.info('starting to reorder matrix ...')
 
     matrix = cool.matrix(balance=False, sparse=True)
     
@@ -526,39 +550,38 @@ def ALLHiC_plotMatrix(args=None):
                                         'contigidx'].aggregate(tuple)
     grouped_contig_idx = grouped_contig_idx.tolist()
 
+    # reorder matrix 
     reordered_contigidx = contig2chrom['contigidx'].values
 
-  
-    reordered_matrix = matrix[:].tocsr()[:, reordered_contigidx][reordered_contigidx, :]
-    reordered_contig_bins = contig_bins[:].loc[reordered_contigidx].reset_index(drop=True)
-
-    
+    reordered_matrix = matrix[:].tocsr(
+                         )[:, reordered_contigidx][reordered_contigidx, :]
+    reordered_contig_bins = contig_bins[:].loc[reordered_contigidx].reset_index(
+        drop=True)
     reordered_matrix = triu(reordered_matrix).tocoo()
-    # chrom_pixels = pd.Series.sparse.from_coo(reordered_matrix.tocoo())
-    # chrom_pixels = pd.DataFrame(chrom_pixels).reset_index()
-    # chrom_pixels.columns = ['bin1_id', 'bin2_id', 'count']
+
     chrom_pixels = dict(zip(['bin1_id', 'bin2_id', 'count'],
                             [reordered_matrix.row,
                             reordered_matrix.col,
                             reordered_matrix.data]))
-
-    
-    cooler.create_cooler(args.matrix.rsplit(".", 1)[
-                         0] + ".chrom.cool", reordered_contig_bins, 
+    order_cool_path = f"{outprefix}.ordered.cool"
+    cooler.create_cooler(order_cool_path, reordered_contig_bins,
                          chrom_pixels, metadata=HIC_METADATA)
-    log.info('Successful, reorder the contig-level matrix, and output into `{}`')
-
+    log.info('Successful, reorder the contig-level matrix, '
+                'and output into `{}`'.format(order_cool_path))
+    
+    log.info('staring to collaspe chromosome bin ...')
     contig2chrom['contigidx'] = range(len(contig2chrom))
     contig2chrom = contig2chrom.reset_index().set_index('chromidx')
- 
-    sum_small_contig(args.matrix.rsplit(".", 1)[0] + ".chrom.cool", 
-                contig2chrom, chrom_bin_interval_df, 'out.cool', metadata=HIC_METADATA)
-     
+    
+    sum_small_contig(order_cool_path, contig2chrom, chrom_bin_interval_df, 
+                     f'{outprefix}.cool', metadata=HIC_METADATA)
+    log.info(f'Successful, collasped the contact into chromosome-level'
+                'and output into {ourprefix}.cool')
+    
+
     log.info('Done, elasped time {} s'.format(time.time() - start_time))
 
 
 if __name__ == "__main__":
-    #ALLHiC_plotMatrix(sys.argv[1:])
-    os.chdir('/share/home/stu_wangyibin/test/ALLHiC_plot')
-    #ALLHiC_plotMatrix(['--agp', 'groups.agp', '--matrix', 'sample.cool'])
-    ALLHiC_plotMatrix(['--agp', 'chrn.V2.agp', '--matrix', 'JGY.cool'])
+    ALLHiC_plotMatrix(sys.argv[1:])
+

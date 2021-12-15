@@ -6,7 +6,7 @@ def convert_file(in_gff3, in_agp, out_gff):
 	ctg_on_chr = {}
 	with open(in_agp, 'r') as fin:
 		for line in fin:
-			if line.strip() == '':
+			if line.strip() == '' or line[0] == "#":
 				continue
 			data = line.strip().split()
 			if data[4] == 'U':

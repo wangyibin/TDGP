@@ -6,6 +6,4 @@
 
 from TDGP.formats.blast import BlastLine
 
-for line in f:
-    b = BlastLine(line)
 
