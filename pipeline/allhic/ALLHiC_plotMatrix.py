@@ -79,8 +79,7 @@ def parse_arguments(args=None):
     pOpt.add_argument('--cmap', default='YlOrRd',
             help='colormap of heatmap [default: %(default)s]')
     pOpt.add_argument('-o', '--outprefix', 
-            default='prefix_of_cool',
-            help='prefix of output heatmap [default: %(default)s]')
+            help='prefix of output heatmap [default: prefix.cool]')
     pOpt.add_argument('-om', '--outmatrix', default=None,
             help='output the chromosomal-level matrix [default: %(default)s]')
     pOpt.add_argument('-h', '--help', action='help',
@@ -477,9 +476,9 @@ def ALLHiC_plotMatrix(args=None):
     agp_df, _ = import_agp(args.agp)
     bin_size = int(cool.binsize)
 
-    if not args.outprefix:
-        outprefix = op.basename(cool).rsplit(".", 1)[0]
     
+    if args.outprefix is None:
+        outprefix = op.basename(cool.filename).rsplit(".", 1)[0]
     ## get chromosome size database from arguments or agp file
     if not args.chromSize:
         chrom_sizes = agp_df.groupby(agp_df.index)['end'].max()
@@ -574,7 +573,7 @@ def ALLHiC_plotMatrix(args=None):
     contig2chrom = contig2chrom.reset_index().set_index('chromidx')
     
     sum_small_contig(order_cool_path, contig2chrom, chrom_bin_interval_df, 
-                     f'{outprefix}.cool', metadata=HIC_METADATA)
+                     f'{outprefix}.chrom.cool', metadata=HIC_METADATA)
     log.info(f'Successful, collasped the contact into chromosome-level'
                 'and output into {ourprefix}.cool')
     
