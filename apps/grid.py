@@ -88,6 +88,15 @@ if [[ ! -z $PBS_O_WORKDIR ]]; then
 fi
 """
 
+SLURM_HEADER = """#!/bin/bash {}
+#SBATCH --nodes=1 {}
+#SBATCH --ntasks-per-node={}
+#SBATCH --partition={}
+{}
+CURDIR=`pwd`
+"""
+
+
 SGE_HEADER = """#!/bin/bash
 #$ -j y
 #$ -S /bin/bash
@@ -164,6 +173,12 @@ class Cluster(object):
             array = "\n#PBS -J " + array if array else ""
             mem = "#PBS -l mem={}".format(memory) if memory else ""
             self.header = PBS_HEADER.format(name, queue, threads, array, mem)
+        elif self.CLUSTER.upper() == 'SLURM':
+            queue = queue if queue else "low"
+            name = "\n#SBATCH --job-name={}".format(name) if name else ""
+            array = "\n#SBATCH --array=" + array if array else ""
+            mem = "\n#SBATCH --mem={}".format(memory) if memory else ""
+            self.header = SLURM_HEADER.format(name, mem, threads, queue, array)
         else:
             logging.warning("there is not of header "
                             "of cluster:`{}`".format(self.CLUSTER))
@@ -181,6 +196,8 @@ class Cluster(object):
             self.raw_header = PBS_HEADER
         elif self.CLUSTER.upper() == "TORQUE":
             self.raw_header = PBS_HEADER
+        elif self.CLUSTER.upper() == "SLURM":
+            self.raw_header = SLURM_HEADER
         else:
             logging.warning("there is not of header "
                             "of cluster:`{}`".format(self.CLUSTER))
