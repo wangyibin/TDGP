@@ -192,7 +192,7 @@ def main(args):
             best = results[0]
         except IndexError:
             logger.error("Couldn't found best results")
-            sys.exit
+            sys.exit()
         logger.info('Best result is [{}]'.format(best))
 
         best_targetDir = "./{}_{}".format(best[0], best[1]) 
