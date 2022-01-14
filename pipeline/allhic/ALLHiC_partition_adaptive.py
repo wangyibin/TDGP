@@ -138,10 +138,11 @@ def main(args):
             help='counts txt', required=True)
     pReq.add_argument('-p', '--pairs', 
             help='prunned pairs txt', required=True)
-    pReq.add_argument('-r', '--reference', 
-            help='draft.asm.fasta', required=True)
+    # pReq.add_argument('-r', '--reference', 
+    #         help='draft.asm.fasta', required=True)
     pReq.add_argument('-k', required=True, type=int,
             help='number of groups (user defined K value)')
+  
     pOpt.add_argument('-e', '--enzyme', default='HindIII',
             help='enzyme sites (HindIII: AAGCTT; MboI: GATC)')
     pOpt.add_argument('--tmp_dir', default='ALLHiC_tmp', 
@@ -155,7 +156,7 @@ def main(args):
 
     counts_file = args.counts
     pairs_file = args.pairs
-    ref = args.reference
+    # ref = args.reference
     k = args.k
     enzyme = args.enzyme
     try:
@@ -177,18 +178,21 @@ def main(args):
         
         params = []
         for minREs in range(50, 300, 5):
-            for maxLinkDensity in range(8, 20, 2):
+            for maxLinkDensity in range(10, 20, 2):
                 params.append((counts_file, pairs_file, k, minREs, maxLinkDensity))
         
-        logger.info("Finding best partition result ...")
+        logger.info("Finding the best partition result ...")
         results = Parallel(n_jobs=args.threads)(delayed(
                                         find_best_partition)(c, p, g, r, l)
                                             for c, p, g, r, l in params)
 
         results = filter(lambda x: x is not None, results)
         results = sorted(results, key=lambda x: x[4])
-        
-        best = results[0]
+        try:
+            best = results[0]
+        except IndexError:
+            logger.error("Couldn't found best results")
+            sys.exit
         logger.info('Best result is [{}]'.format(best))
 
         best_targetDir = "./{}_{}".format(best[0], best[1]) 
