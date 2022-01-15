@@ -168,7 +168,7 @@ def main(args):
         logger.error('Command not found of `allhic`')
         sys.exit()
 
-    prefix = pairs_file.replace(".pairs.txt", "")
+    prefix = counts_file.replace(".txt", "")
     total_length = import_countRE(counts_file)['Length'].sum()
 
     results = []
@@ -192,7 +192,7 @@ def main(args):
             best = results[0]
         except IndexError:
             logger.error("Couldn't found best results")
-            sys.exit()
+            return
         logger.info('Best result is [{}]'.format(best))
 
         best_targetDir = "./{}_{}".format(best[0], best[1]) 
