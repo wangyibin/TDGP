@@ -177,8 +177,8 @@ def main(args):
         os.chdir(tmpDir)
         
         params = []
-        for minREs in range(50, 300, 5):
-            for maxLinkDensity in range(10, 20, 2):
+        for minREs in range(500, 900, 5):
+            for maxLinkDensity in range(2, 10, 2):
                 params.append((counts_file, pairs_file, k, minREs, maxLinkDensity))
         
         logger.info("Finding the best partition result ...")

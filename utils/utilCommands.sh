@@ -139,3 +139,9 @@ pwc() {
         fi
         parallel --block=10M --pipe wc $@ 2>/dev/null | awk '{s+=$1} END {print s}'
 }
+
+
+clean_lastdb(){
+        rm *.{tis,suf,ssp,sds,prj,des,bck}
+}
+
