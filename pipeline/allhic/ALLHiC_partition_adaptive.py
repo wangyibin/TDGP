@@ -142,9 +142,16 @@ def main(args):
     #         help='draft.asm.fasta', required=True)
     pReq.add_argument('-k', required=True, type=int,
             help='number of groups (user defined K value)')
-  
-    pOpt.add_argument('-e', '--enzyme', default='HindIII',
-            help='enzyme sites (HindIII: AAGCTT; MboI: GATC)')
+    pOpt.add_argument('--minREs', default='50,300', 
+            help='comma seperated of minREs ranges [default: %(default)s]')
+    pOpt.add_argument('--minREs_step', default=5, type=int,
+            help='step of minREs [default: %(default)s]')
+    pOpt.add_argument('--maxLinkDensity', default='2,10', 
+            help='comma seperated of maxLinkDensity ranges [default: %(default)s]')
+    pOpt.add_argument('--maxLinkDensity_step', default=2, type=int,
+            help='step of maxLinkDensity [default: %(default)s]')
+    # pOpt.add_argument('-e', '--enzyme', default='HindIII',
+    #         help='enzyme sites (HindIII: AAGCTT; MboI: GATC)')
     pOpt.add_argument('--tmp_dir', default='ALLHiC_tmp', 
             help='temporary directory [default: $(default)s]')
     pOpt.add_argument('-t', '--threads', type=int, default=8,
@@ -156,13 +163,11 @@ def main(args):
 
     counts_file = args.counts
     pairs_file = args.pairs
-    # ref = args.reference
     k = args.k
-    enzyme = args.enzyme
-    try:
-        esite = ENZYME_SITES[enzyme.upper()]
-    except KeyError:
-        esite = enzyme 
+    minREs_tuple = list(map(int, args.minREs.split(",")))
+    maxLinkDensity_tuple = list(map(int, args.maxLinkDensity.split(",")))
+    minREs_step = args.minREs_step
+    maxLinkDensity_step = args.maxLinkDensity_step
 
     if not cmd_exists('allhic'):
         logger.error('Command not found of `allhic`')
@@ -177,8 +182,10 @@ def main(args):
         os.chdir(tmpDir)
         
         params = []
-        for minREs in range(500, 900, 5):
-            for maxLinkDensity in range(2, 10, 2):
+        for minREs in range(minREs_tuple[0], minREs_tuple[1], minREs_step):
+            for maxLinkDensity in range(maxLinkDensity_tuple[0], 
+                                        maxLinkDensity_tuple[1], 
+                                        maxLinkDensity_step):
                 params.append((counts_file, pairs_file, k, minREs, maxLinkDensity))
         
         logger.info("Finding the best partition result ...")
