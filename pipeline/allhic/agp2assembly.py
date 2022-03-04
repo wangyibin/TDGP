@@ -54,6 +54,8 @@ def agp2assembly(args):
     pReq = p.add_argument_group('Required arguments')
     pOpt = p.add_argument_group('Optional arguments')
     pReq.add_argument('agpfile', help='agpfile from allhic or other ways')
+    pOpt.add_argument('--add_gap', default=False, action="store_true",
+                      help='add gap into assembly [default: %(default)s]')
     pOpt.add_argument('-o', '--output', type=argparse.FileType('w'),
                       default=sys.stdout, help='output file [default: stdout]')
     pOpt.add_argument('-h', '--help', action='help',
@@ -80,16 +82,18 @@ def agp2assembly(args):
         hic_gap_number = i + 1
 
     for item in tig_list:
-        pass
         print(">{}".format(" ".join(map(str, item))), 
                             file=args.output)
     else:
-        print(">{}".format(" ".join(['hic_gap_{}'.format(
-            hic_gap_number), str(hic_gap_number), str(gap_length)])), 
-            file=args.output)
+        if args.add_gap:
+            print(">{}".format(" ".join(['hic_gap_{}'.format(
+                hic_gap_number), str(hic_gap_number), str(gap_length)])), 
+                file=args.output)
+            _gap = " {} ".format(hic_gap_number)
+        else: 
+             _gap = " "
         for chrom in chrom_matrix_db:
-
-            print(" {} ".format(hic_gap_number).join(
+            print(_gap.join(
                 map(str, chrom_matrix_db[chrom])), file=args.output)
 
 
