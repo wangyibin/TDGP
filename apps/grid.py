@@ -141,7 +141,7 @@ class Cluster(object):
         try:
             self.CLUSTER = os.environ['CLUSTER']
         except KeyError:
-            self.CLUSTER = 'SGE'
+            self.CLUSTER = 'SLURM'
             logging.warning('There is not environment `CLUSTER` in PATH')
 
         return self.CLUSTER
