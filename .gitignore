@@ -3,9 +3,8 @@
 ### Python ###
 # Byte-compiled / optimized / DLL files
 __pycache__/
-*/__pycache__/
 *.py[cod]
-*/*.py[cod]
+*$py.class
 
 # C extensions
 *.so
@@ -26,9 +25,6 @@ var/
 *.egg-info/
 .installed.cfg
 *.egg
-__pycache__
-*/__pycache__
-*pyc
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt

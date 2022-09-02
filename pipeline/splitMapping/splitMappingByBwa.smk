@@ -44,7 +44,7 @@ rule bwa_mem:
         "logs/{sample}_bwa_mem.log"
     threads: ncpus
     shell:
-        "bwa mem -t {threads} {FA} {input.fq1} {input.fq2} 2>{log} | "
+        "bwa mem -t {threads} {FA} {input.fq1} {input.fq2} | "
         "samtools sort -@ {threads} > {output} 2>{log}"
 
 rule bam_merge:

@@ -112,7 +112,7 @@ if __name__ == "__main__":
     pReq.add_argument('allValidPairs', help='allValidParis file')
     pReq.add_argument('chromsize', help='chromsize file')
     pOpt.add_argument('-t', '--thread', type=int, default=10, 
-            help='thread numbers of program [default: %(default)]')
+            help='thread numbers of program [default: %(default)s]')
     pOpt.add_argument('-o', '--outdir', default='./',
             help='outdir of results [default: %(default)s]')
     pOpt.add_argument('-h', '--help', action='help',
